@@ -1,0 +1,28 @@
+{
+  "name": "寵沐PetSalon | 專業美容・安親住宿",
+  "short_name": "寵沐PetSalon",
+  "description": "提供專業寵物美容、安親及住宿服務的預約平台。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F6FAFB",
+  "theme_color": "#8FD3E0",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/public/logo/line_oa_chat_260504_153145.jpg",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/public/logo/line_oa_chat_260504_153145.jpg",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/public/logo/line_oa_chat_260504_153145.jpg",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
+}
