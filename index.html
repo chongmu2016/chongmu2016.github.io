@@ -289,13 +289,13 @@ body.lock-scroll {
                     <i data-lucide="chevron-right" class="w-4 h-4 text-theme-sub/50 group-hover:text-[#06C755]"></i>
                 </a>
 
-                <a href="https://maps.app.goo.gl/k7YW9GSCpdi2MmGJA" target="_blank" class="btn-card flex items-center p-4 rounded-2xl group hover:border-theme-primary/50">
+                <a id="location-link" href="https://maps.app.goo.gl/k7YW9GSCpdi2MmGJA" target="_blank" class="btn-card flex items-center p-4 rounded-2xl group hover:border-theme-primary/50">
                     <div class="w-10 h-10 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center mr-4 group-hover:bg-theme-primary/80 group-hover:text-white transition-colors">
                         <i data-lucide="map-pin" class="w-5 h-5"></i>
                     </div>
                     <div class="flex-1">
                          <span class="block text-[10px] font-bold text-theme-sub tracking-widest uppercase mb-1">Location</span>
-                         <span class="block text-sm font-bold text-theme-text group-hover:text-theme-dark transition-colors">新北市林口區中山路235號</span>
+                         <span id="location-address" class="block text-sm font-bold text-theme-text group-hover:text-theme-dark transition-colors">新北市林口區中山路235號</span>
                     </div>
                     <i data-lucide="arrow-up-right" class="w-4 h-4 text-theme-sub/50 group-hover:text-theme-dark"></i>
                 </a>
@@ -498,20 +498,20 @@ body.lock-scroll {
                 <label class="block text-xs font-bold text-theme-sub mb-1.5 ml-1">指定醫院 (若未填寫則依店家指定)</label>
                 <input type="text" id="specified_hospital" class="w-full bg-white/60 border border-theme-sub/30 rounded-xl px-4 py-3 text-theme-text focus:outline-none focus:border-theme-primary transition" placeholder="可填寫習慣的獸醫院">
             </div>
-            <div class="bg-theme-dark/5 rounded-xl p-3 border border-theme-dark/10 mt-3">
-                <span class="block text-xs font-bold text-theme-dark mb-1">乙方指定醫院：</span>
-                <div class="text-xs text-theme-text space-y-1">
-                    <p class="font-bold">待確認</p>
-                    <a href="[指定醫院url]" target="_blank" class="flex items-center gap-1.5 hover:text-theme-dark transition-colors group">
-                        <i data-lucide="map-pin" class="w-3 h-3 text-theme-sub group-hover:text-theme-primary"></i>
-                        <span>待確認地址</span>
-                    </a>
-                </div>
+<div class="bg-theme-dark/5 rounded-xl p-3 border border-theme-dark/10 mt-3">
+            <span class="block text-xs font-bold text-theme-dark mb-1">乙方指定醫院：</span>
+            <div class="text-xs text-theme-text space-y-1">
+                <p class="font-bold">寶護動物醫院</p>
+                <a href="https://www.google.com/maps/search/?api=1&query=新北市林口區中山路281號" target="_blank" class="flex items-center gap-1.5 hover:text-theme-dark transition-colors group">
+                    <i data-lucide="map-pin" class="w-3 h-3 text-theme-sub group-hover:text-theme-primary"></i>
+                    <span>新北市林口區中山路281號</span>
+                </a>
             </div>
         </div>
     </div>
+</div>
 
-    <div id="section-grooming" class="glass-panel p-6 rounded-2xl relative">
+<div id="section-grooming" class="glass-panel p-6 rounded-2xl relative">
         <div class="flex items-center gap-2 mb-6 border-b border-theme-sub/20 pb-3">
             <span class="text-2xl">✂️</span>
             <h3 class="font-bold text-theme-text text-lg">本次服務內容*</h3>
@@ -768,12 +768,12 @@ body.lock-scroll {
             <h4 class="text-xs font-bold text-theme-sub tracking-widest uppercase mb-2">乙方（店家）資訊</h4>
             <div class="grid grid-cols-2 gap-y-2 text-sm">
                 <div><span class="text-theme-sub text-xs block">店家名稱</span><span class="font-bold text-theme-text">寵沐寵物美容生活館</span></div>
-                <div><span class="text-theme-sub text-xs block">負責人</span><span class="font-bold text-theme-text">[請填入負責人姓名]</span></div>
+                <div><span class="text-theme-sub text-xs block">負責人</span><span class="font-bold text-theme-text">景麗華</span></div>
                 <div><span class="text-theme-sub text-xs block">特寵業字號</span><span class="font-bold text-theme-text">特寵業字第A1070619號</span></div>
-                <div><span class="text-theme-sub text-xs block">統一編號</span><span class="font-bold text-theme-text">[請填入統一編號]</span></div>
+                <div><span class="text-theme-sub text-xs block">統一編號</span><span class="font-bold text-theme-text">72786205</span></div>
                 <div><span class="text-text-theme-sub text-xs block">聯絡電話</span><span class="font-bold text-theme-text">02 2600 8572</span></div>
-                <div><span class="text-theme-sub text-xs block">營業時間</span><span class="font-bold text-theme-text">[請填入營業時間]</span></div>
-                <div class="col-span-2"><span class="text-theme-sub text-xs block">營業地址</span><span class="font-bold text-theme-text">新北市林口區中山路235號</span></div>
+                <div><span class="text-theme-sub text-xs block">營業時間</span><span id="vendor-hours" class="font-bold text-theme-text">11:00-20:00 (週二、隔週一公休)</span></div>
+                <div class="col-span-2"><span class="text-theme-sub text-xs block">營業地址</span><span id="vendor-address" class="font-bold text-theme-text">新北市林口區中山路235號</span></div>
             </div>
         </div>
         <div class="mb-6">
@@ -1467,8 +1467,37 @@ if (checkin && checkout) {
     checkout.addEventListener('change', validateDateRange);
 }
     lucide.createIcons();        
+let storeInfo = {
+    address: "載入中...",
+    hours: "載入中..."
+};
+
+async function fetchStoreInfo() {
+    const { data, error } = await supabaseClient
+        .from('store_info')
+        .select('address, hours')
+        .eq('id', 1)
+        .single();
+    
+    if (data) {
+        storeInfo = data;
+        // 更新靜態 DOM
+        const locationLink = document.getElementById('location-link');
+        const locationAddress = document.getElementById('location-address');
+        const vendorAddress = document.getElementById('vendor-address');
+        const vendorHours = document.getElementById('vendor-hours');
+
+        if (locationAddress) locationAddress.innerText = data.address;
+        if (locationLink) locationLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`;
+        if (vendorAddress) vendorAddress.innerText = data.address;
+        if (vendorHours) vendorHours.innerText = data.hours;
+    }
+}
         // 1. 路由處理
-        window.addEventListener('load', handleHashChange);
+        window.addEventListener('load', () => {
+            fetchStoreInfo();
+            handleHashChange();
+        });
         window.addEventListener('hashchange', handleHashChange);
 
         let currentType = 'grooming'; 
@@ -2323,7 +2352,7 @@ ${isHighRisk ? `
         </div>
         <div class="vendor-item">
           <span class="label">負責人</span>
-          <span class="value">[請填入負責人姓名]</span>
+          <span class="value">景麗華</span>
         </div>
         <div class="vendor-item">
           <span class="label">特寵業字號</span>
@@ -2331,7 +2360,7 @@ ${isHighRisk ? `
         </div>
         <div class="vendor-item">
           <span class="label">統一編號</span>
-          <span class="value">[請填入統一編號]</span>
+          <span class="value">72786205</span>
         </div>
         <div class="vendor-item">
           <span class="label">聯絡電話</span>
@@ -2339,11 +2368,11 @@ ${isHighRisk ? `
         </div>
         <div class="vendor-item">
           <span class="label">營業時間</span>
-          <span class="value">[請填入營業時間]</span>
+          <span class="value">${storeInfo.hours}</span>
         </div>
         <div class="vendor-item vendor-full">
           <span class="label">營業地址</span>
-          <span class="value">新北市林口區中山路235號</span>
+          <span class="value">${storeInfo.address}</span>
         </div>
       </div>
     </div>

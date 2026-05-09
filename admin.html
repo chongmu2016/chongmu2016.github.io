@@ -813,7 +813,8 @@ const Dashboard = ({ user }) => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showPwdModal, setShowPwdModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-const [syncing, setSyncing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
   const verifyAdminPassword = async () => {
     if (!isAdmin) return false;
     const pwd = prompt("請輸入管理員密碼");
@@ -933,6 +934,19 @@ if (error) {
     return true;
   };
 
+  // 將驗證函式掛載到 window，以便 SettingsView 等子元件調用
+  useEffect(() => {
+    if (isAdmin) {
+      window.dashboardUtils = { verifyAdminPassword: verifyAdminPassword };
+    }
+    // 元件卸載時清理
+    return () => {
+      if (window.dashboardUtils) {
+        delete window.dashboardUtils;
+      }
+    };
+  }, [isAdmin]);
+
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
       const raw = parseData(o);
@@ -1018,33 +1032,40 @@ if (error) {
         <input type="text" placeholder="搜尋飼主、電話、寵物名..." value={search}
           onChange={(e)=>setSearch(e.target.value)} className="w-full px-4 py-3 rounded-2xl bg-white shadow border focus:outline-none" />
 
-<div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-white p-2 rounded-2xl shadow border">
+<div className="grid grid-cols-2 md:grid-cols-5 gap-2 bg-white p-2 rounded-2xl shadow border">
   <button
     onClick={()=>setActiveTab("grooming")}
     className={`py-2 rounded-xl font-bold flex items-center justify-center gap-2 ${activeTab==="grooming"?"bg-bear-primary text-white":"text-gray-400"}`}
   >
-    <Icon name="scissors" size={16} /> 洗澡美容
+    <Icon name="scissors" size={16} /> 美容
   </button>
 
   <button
     onClick={()=>setActiveTab("boarding")}
     className={`py-2 rounded-xl font-bold flex items-center justify-center gap-2 ${activeTab==="boarding"?"bg-bear-dark text-white":"text-gray-400"}`}
   >
-    <Icon name="home" size={16} /> 住宿安親
+    <Icon name="home" size={16} /> 住宿
   </button>
 
   <button
     onClick={()=>setActiveTab("calendar")}
     className={`py-2 rounded-xl font-bold flex items-center justify-center gap-2 ${activeTab==="calendar"?"bg-bear-accent text-bear-text":"text-gray-400"}`}
   >
-    <Icon name="calendar" size={16} /> 日曆檢視
+    <Icon name="calendar" size={16} /> 日曆
   </button>
 
   <button
     onClick={()=>setActiveTab("crm")}
     className={`py-2 rounded-xl font-bold flex items-center justify-center gap-2 ${activeTab==="crm"?"bg-gray-800 text-white":"text-gray-400"}`}
   >
-    <Icon name="users" size={16} /> 顧客管理
+    <Icon name="users" size={16} /> 顧客
+  </button>
+  
+  <button
+    onClick={()=>setActiveTab("settings")}
+    className={`py-2 rounded-xl font-bold flex items-center justify-center gap-2 ${activeTab==="settings"?"bg-yellow-500 text-white":"text-gray-400"}`}
+  >
+    <Icon name="settings" size={16} /> 設定
   </button>
 </div>
 
@@ -1052,6 +1073,8 @@ if (error) {
           <div className="text-center py-10 text-gray-400 font-bold">載入中...</div>
         ) : activeTab === "calendar" ? (
           <CalendarView orders={orders} onSelectOrder={setSelectedOrder} />
+        ) : activeTab === "settings" ? (
+          <SettingsView />
         ) : activeTab === "crm" ? (
           <div className="space-y-3">
             {filteredCustomers.map(c => (
@@ -1143,6 +1166,107 @@ if (error) {
     </div>
   );
 };
+const SettingsView = () => {
+  const [info, setInfo] = useState({ address: "", hours: "", map_url: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchInfo = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('store_info')
+        .select('*')
+        .eq('id', 1)
+        .single();
+      if (data) {
+        setInfo(data);
+      }
+      setLoading(false);
+    };
+    fetchInfo();
+  }, []);
+
+  const handleSave = async () => {
+    // 從全域物件獲取驗證函式
+    if (!window.dashboardUtils || typeof window.dashboardUtils.verifyAdminPassword !== 'function') {
+        alert("錯誤：找不到驗證函式，請重新整理頁面。");
+        return;
+    }
+
+    const isVerified = await window.dashboardUtils.verifyAdminPassword();
+    if (!isVerified) {
+      return; // 如果驗證失敗或取消，則中止操作
+    }
+    
+    setSaving(true);
+    const { error } = await supabase
+      .from('store_info')
+      .update({ 
+        address: info.address, 
+        hours: info.hours,
+        map_url: info.map_url 
+      })
+      .eq('id', 1);
+    
+    if (error) {
+      alert("儲存失敗：" + error.message);
+    } else {
+      alert("✅ 儲存成功！");
+    }
+    setSaving(false);
+  };
+
+  if (loading) {
+    return <div className="text-center py-10 text-gray-400 font-bold">載入設定...</div>;
+  }
+
+  return (
+    <div className="glass-card p-6 space-y-4">
+      <h3 className="font-black text-xl text-bear-text flex items-center gap-2">
+        <Icon name="settings" /> 商店資訊設定
+      </h3>
+      <div>
+        <label className="text-sm font-bold text-gray-500 mb-1 block">營業地址</label>
+        <input 
+          type="text" 
+          className="admin-input"
+          value={info.address || ''}
+          onChange={(e) => setInfo(prev => ({...prev, address: e.target.value}))}
+          placeholder="請輸入完整地址"
+        />
+      </div>
+      <div>
+        <label className="text-sm font-bold text-gray-500 mb-1 block">地圖連結 (可選填)</label>
+        <input 
+          type="text" 
+          className="admin-input"
+          value={info.map_url || ''}
+          onChange={(e) => setInfo(prev => ({...prev, map_url: e.target.value}))}
+          placeholder="例如：Google Maps 分享連結"
+        />
+        <p className="text-xs text-gray-400 mt-1">若留空，系統會自動用地址產生連結。</p>
+      </div>
+       <div>
+        <label className="text-sm font-bold text-gray-500 mb-1 block">營業時間</label>
+        <textarea 
+          className="admin-input h-24"
+          value={info.hours || ''}
+          onChange={(e) => setInfo(prev => ({...prev, hours: e.target.value}))}
+          placeholder="請輸入營業時間說明"
+        />
+      </div>
+      <button 
+        onClick={handleSave} 
+        disabled={saving}
+        className="w-full bg-bear-dark text-white py-3 rounded-xl font-bold shadow"
+      >
+        {saving ? "儲存中..." : "儲存設定"}
+      </button>
+    </div>
+  );
+};
+
 const App = () => {
   const [session, setSession] = useState(null);
   // ✅ 增加一個 loading 狀態，避免在 session 檢查完成前顯示登入畫面
