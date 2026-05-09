@@ -343,7 +343,7 @@ const handleNoteChange = (e) => {
   const val = e.target.value;
   setNote(val);
   noteRef.current = val;
-  saveNoteNow(val); // ✅ 每打一個字就存
+  // ✅ 移除每字儲存，改為失焦(onBlur)或關閉視窗時才儲存，以優化效能
 };
 
 const handleBlur = async () => {
