@@ -1241,6 +1241,7 @@ const contractData = {
                     },
                     body: JSON.stringify({
                         customerName: data.owner_name || "顧客",
+                        petName: data.pet_name || "您的毛孩", // ✅ 加入寵物名稱
                         customerEmail: data.email,
                         emailHtml: html
                     })
@@ -2047,7 +2048,7 @@ const LOGO_URL = "https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/pub
     const age = calcAge();
     const isHighRisk = (age >= 8) || (age > 0 && age < 0.42) || (data.history_check === "有病史");
 
-    const signTime = signed_at || created_at;
+    const signTime = signed_at || created_at || new Date().toISOString();
 
     return `
 <!DOCTYPE html>
