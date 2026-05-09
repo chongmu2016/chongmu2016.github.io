@@ -256,7 +256,7 @@ body.lock-scroll {
                     </div>
                     <div class="flex-1">
                          <span class="block text-[10px] font-bold text-theme-sub tracking-widest uppercase mb-1">Location</span>
-                         <span class="block text-sm font-bold text-theme-text group-hover:text-theme-dark transition-colors">新北市林口區湖南里民享路46號</span>
+                         <span class="block text-sm font-bold text-theme-text group-hover:text-theme-dark transition-colors">新北市林口區中山路235號</span>
                     </div>
                     <i data-lucide="arrow-up-right" class="w-4 h-4 text-theme-sub/50 group-hover:text-theme-dark"></i>
                 </a>
@@ -283,7 +283,7 @@ body.lock-scroll {
                 <h3 class="text-theme-text font-bold text-lg mb-1">加入官方 LINE</h3>
                 
                 <div class="space-y-3">
-                    <a href="https://line.me/R/ti/p/[請填入LINE ID]" target="_blank" class="block w-full bg-[#06C755] text-white py-3 rounded-xl font-bold shadow-lg shadow-[#06C755]/20 hover:scale-[1.02] transition-transform">
+                    <a href="https://line.me/R/ti/p/@847lrbuj" target="_blank" class="block w-full bg-[#06C755] text-white py-3 rounded-xl font-bold shadow-lg shadow-[#06C755]/20 hover:scale-[1.02] transition-transform">
                         1. 點擊加入好友
                     </a>
 <div class="flex items-center justify-center gap-2 text-red-500 font-bold text-sm bg-red-50 py-2 rounded-lg border border-red-100">
@@ -292,7 +292,7 @@ body.lock-scroll {
         </div>
 </div>
 
-<form id="main-form" class="space-y-5 animate-slide-up" style="animation-delay: 0.1s;">
+<form id="main-form" class="space-y-5 animate-slide-up" style="animation-delay: 0.1s;" onsubmit="event.preventDefault(); handleSubmit();">
                 
                 <div class="glass-panel p-6 rounded-2xl relative">
     <div class="flex items-center gap-3 mb-6 border-b border-theme-sub/20 pb-4">
@@ -660,11 +660,11 @@ body.lock-scroll {
                             <label class="block text-xs font-bold text-theme-sub mb-2 ml-1">接受服務項目*</label>
                             <div class="flex gap-3">
                                 <label class="flex-1 bg-white/60 border border-theme-sub/20 rounded-xl p-3 flex items-center justify-center gap-2 cursor-pointer has-[:checked]:bg-theme-secondary/20 has-[:checked]:border-theme-secondary transition-all">
-                                    <input type="radio" name="service_project" value="狗狗住宿" class="hidden" required>
+                                    <input type="radio" name="service_project" value="狗狗住宿" class="sr-only" required>
                                     <span class="text-sm font-bold">狗狗住宿</span>
                                 </label>
                                 <label class="flex-1 bg-white/60 border border-theme-sub/20 rounded-xl p-3 flex items-center justify-center gap-2 cursor-pointer has-[:checked]:bg-theme-secondary/20 has-[:checked]:border-theme-secondary transition-all">
-                                    <input type="radio" name="service_project" value="貓咪住宿" class="hidden">
+                                    <input type="radio" name="service_project" value="貓咪住宿" class="sr-only">
                                     <span class="text-sm font-bold">貓咪住宿</span>
                                 </label>
                             </div>
@@ -729,7 +729,7 @@ body.lock-scroll {
                             <div><span class="text-theme-sub text-xs block">統一編號</span><span class="font-bold text-theme-text">[請填入統一編號]</span></div>
                             <div><span class="text-text-theme-sub text-xs block">聯絡電話</span><span class="font-bold text-theme-text">02 2600 8572</span></div>
                             <div><span class="text-theme-sub text-xs block">營業時間</span><span class="font-bold text-theme-text">[請填入營業時間]</span></div>
-                            <div class="col-span-2"><span class="text-theme-sub text-xs block">營業地址</span><span class="font-bold text-theme-text">新北市林口區湖南里民享路46號</span></div>
+                            <div class="col-span-2"><span class="text-theme-sub text-xs block">營業地址</span><span class="font-bold text-theme-text">新北市林口區中山路235號</span></div>
                         </div>
                     </div>
 
@@ -1399,8 +1399,8 @@ function updateBaseRequired() {
     setRequiredByName('temperament', true);
     setRequiredByName('history_check', true);
 
-    // 寵物照片一定要
-    setRequiredById('pet_photo_file', true);
+    // 寵物照片已透過自訂 JS 驗證，取消原生 required 以避免 invalid form control 報錯
+    setRequiredById('pet_photo_file', false);
 }
 // ✅ 生日 / 年齡必填控制
 function updateAgeRequired() {
@@ -1418,31 +1418,15 @@ function updateAgeRequired() {
 function updateBoardingRequired() {
     const isBoarding = currentType === 'boarding';
 
-    // 住宿才必填的 radio 群組
-    ['deworming','barking','food_guard','toilet','vaccine'].forEach(name => {
-        setRequiredByName(name, isBoarding);
-    });
+    // 根據最新的 HTML 欄位動態設定必填狀態
+    setRequiredByName('service_project', isBoarding);
+    setRequiredById('checkin_datetime', isBoarding);
+    setRequiredById('checkout_datetime', isBoarding);
+    setRequiredById('total_price', isBoarding);
+    setRequiredById('payment_status', isBoarding);
 
-    // 疫苗照片只在住宿必填
-    setRequiredById('vaccine_photo_file', isBoarding);
-
-    if (!isBoarding) {
-        setRequiredById('checkin_date', false);
-        setRequiredById('checkout_date', false);
-        setRequiredById('daycare_date', false);
-        return;
-    }
-
-    const overnightVisible = !document.getElementById('date-section-overnight').classList.contains('hidden');
-    if (overnightVisible) {
-        setRequiredById('checkin_date', true);
-        setRequiredById('checkout_date', true);
-        setRequiredById('daycare_date', false);
-    } else {
-        setRequiredById('checkin_date', false);
-        setRequiredById('checkout_date', false);
-        setRequiredById('daycare_date', true);
-    }
+    // 疫苗照片已透過自訂 JS 驗證，取消原生 required 避免隱藏元素報錯
+    setRequiredById('vaccine_photo_file', false);
 }
 // ✅ 晶片號碼：只有選「有晶片」才必填
 document.querySelectorAll('input[name="microchip_status"]').forEach(radio => {
@@ -1461,8 +1445,8 @@ document.querySelectorAll('input[name="history_check"]').forEach(radio => {
     });
 });
 // ✅ 退房日期不能早於入住日期
-const checkin = document.getElementById('checkin_date');
-const checkout = document.getElementById('checkout_date');
+const checkin = document.getElementById('checkin_datetime');
+const checkout = document.getElementById('checkout_datetime');
 
 function validateDateRange() {
     if (checkout.value && checkin.value && checkout.value < checkin.value) {
@@ -1889,6 +1873,14 @@ function showTerms() {
     // ⭐ 卷軸回到最上
     setTimeout(() => {
         body.scrollTop = 0;
+        
+        // ⭐ 檢查內容是否過短，如果沒有卷軸則直接啟用按鈕
+        if (body.scrollHeight <= body.clientHeight + 20) {
+            btn.disabled = false;
+            btn.className = "w-full py-4 bg-gradient-lux text-white rounded-2xl font-bold shadow-glow hover:shadow-lg transition-all active:scale-[0.98] tracking-[0.1em]";
+            btn.innerText = "我已閱讀並同意";
+            tip.classList.add('hidden');
+        }
     }, 50);
 
     modal.classList.remove('hidden');
@@ -2258,7 +2250,7 @@ ${isHighRisk ? `
         </div>
         <div class="vendor-item vendor-full">
           <span class="label">營業地址</span>
-          <span class="value">新北市林口區湖南里民享路46號</span>
+          <span class="value">新北市林口區中山路235號</span>
         </div>
       </div>
     </div>
