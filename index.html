@@ -1258,47 +1258,58 @@ if (currentType === "boarding") {
 
         if (error) throw error;
 
-const contractData = {
-    type: currentType,
-    data,
-    signature_url: signatureUrl,
-    pet_photo_url: petUrl,
-    vaccine_photo_url: vaccineUrl,
-    created_at: new Date().toISOString(),
-    signed_at: signatureTime ? signatureTime.toISOString() : new Date().toISOString()
-};
+        // 主要流程成功，準備顯示成功頁面
+        const contractData = {
+            type: currentType,
+            data,
+            signature_url: signatureUrl,
+            pet_photo_url: petUrl,
+            vaccine_photo_url: vaccineUrl,
+            created_at: new Date().toISOString(),
+            signed_at: signatureTime ? signatureTime.toISOString() : new Date().toISOString()
+        };
 
-const hasEmail = (data.email || "").trim() !== "";
+        const hasEmail = (data.email || "").trim() !== "";
+        let emailSentSuccessfully = false;
 
-// ✅ 如果有填 email，就寄出副本
-if (hasEmail) {
-    // 使用 generateContractHTML 產生完整的契約 HTML
-    const html = generateContractHTML(contractData);
+        // ✅ 如果有填 email，嘗試寄出副本
+        if (hasEmail) {
+            const html = generateContractHTML(contractData);
+            try {
+                const response = await fetch("https://ptwvmgarrwygphmahsoo.supabase.co/functions/v1/resend-email", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+                    },
+                    body: JSON.stringify({
+                        customerName: data.owner_name || "顧客",
+                        customerEmail: data.email,
+                        emailHtml: html
+                    })
+                });
 
-    // 呼叫您部署的 Supabase Edge Function (resend-email)
-    try {
-        await fetch("https://ptwvmgarrwygphmahsoo.supabase.co/functions/v1/resend-email", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "apikey": SUPABASE_ANON_KEY,
-                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-            },
-            // 根據您的 index.ts 檔案結構來建立 body
-            body: JSON.stringify({
-                customerName: data.owner_name || "顧客",
-                customerEmail: data.email,
-                emailHtml: html // 將完整的契約 HTML 傳遞給後端
-            })
-        });
-    } catch (emailError) {
-        // 即使 Email 寄送失敗，也不要中斷流程，只在 console 記錄錯誤
-        console.error("Email notification failed:", emailError);
-    }
-}
+                // 檢查 response 是否成功，CORS 錯誤會在 fetch 層級就拋出，
+                // 但如果 Function 內部錯誤，會回傳非 2xx 狀態碼
+                if (response.ok) {
+                    emailSentSuccessfully = true;
+                } else {
+                    // 伺服器端有錯誤，但不是 CORS 錯誤
+                    console.error("Email notification failed with status:", response.status, await response.text());
+                }
 
-showSuccessPage(contractData, hasEmail);
-return;
+            } catch (emailError) {
+                // 這裡是您遇到的 CORS 錯誤或網路錯誤發生的地方
+                console.error("Email notification failed:", emailError);
+                // emailSentSuccessfully 保持 false
+            }
+        }
+        
+        // 無論 Email 是否寄出成功，都顯示成功頁面，只是內容不同
+        showSuccessPage(contractData, emailSentSuccessfully, hasEmail);
+        return;
+
     } catch (err) {
         console.error(err);
         alert("❌ 提交失敗：" + (err.message || err));
@@ -2014,7 +2025,7 @@ function applyUpdate() {
 
 let lastContractData = null;
 
-function showSuccessPage(contractData, hasEmail) {
+function showSuccessPage(contractData, emailSentSuccessfully, hasEmail) {
     lastContractData = contractData;
 
     document.getElementById("view-home").style.display = "none";
@@ -2027,7 +2038,8 @@ function showSuccessPage(contractData, hasEmail) {
     const title = document.getElementById("success-title");
     const box = document.getElementById("success-box");
 
-    if (hasEmail) {
+    if (hasEmail && emailSentSuccessfully) {
+        // 情況 1: 有填 Email，且成功寄出
         title.innerText = "契約已寄出！";
         iconWrap.className = "mx-auto w-20 h-20 rounded-full flex items-center justify-center bg-theme-primary/20";
         icon.setAttribute("data-lucide", "check");
@@ -2040,7 +2052,22 @@ function showSuccessPage(contractData, hasEmail) {
             契約副本已寄送至您的信箱。<br>
             建議您也可點擊下方按鈕，開啟完整契約截圖備份。
         `;
+    } else if (hasEmail && !emailSentSuccessfully) {
+        // 情況 2: 有填 Email，但因 CORS 或其他錯誤寄送失敗
+        title.innerText = "提交成功！";
+        iconWrap.className = "mx-auto w-20 h-20 rounded-full flex items-center justify-center bg-yellow-100";
+        icon.setAttribute("data-lucide", "mail-warning");
+        icon.className = "w-10 h-10 text-yellow-500";
+        box.className = "rounded-2xl p-4 text-sm text-yellow-700 border border-yellow-200 bg-yellow-50 text-left";
+        box.innerHTML = `
+            <div class="flex items-center gap-2 font-bold mb-1">
+              <i data-lucide="alert-triangle" class="w-4 h-4"></i> Email 寄送失敗
+            </div>
+            契約資料已成功儲存，但 Email 副本因故寄送失敗。<br>
+            <b>請務必點擊下方按鈕開啟契約並「截圖保存」！</b>
+        `;
     } else {
+        // 情況 3: 未填寫 Email
         title.innerText = "提交成功！";
         iconWrap.className = "mx-auto w-20 h-20 rounded-full flex items-center justify-center bg-red-100";
         icon.setAttribute("data-lucide", "alert-circle");
@@ -2051,7 +2078,7 @@ function showSuccessPage(contractData, hasEmail) {
               <i data-lucide="alert-triangle" class="w-4 h-4"></i> 未填寫信箱
             </div>
             您未填寫 Email，無法收到電子副本。<br>
-            請務必點擊下方按鈕開啟契約並截圖保存！
+            <b>請務必點擊下方按鈕開啟契約並「截圖保存」！</b>
         `;
     }
 

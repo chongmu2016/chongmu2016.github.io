@@ -196,6 +196,8 @@ const selectRole = (roleEmail) => {
       setError("帳號或密碼錯誤");
       setLoading(false);
     } else {
+      // 登入成功後，呼叫從 App 傳來的 onLogin 函數
+      // 這個函數會重新獲取 session 並觸發 App 元件的狀態更新
       onLogin();
     }
   };
@@ -1143,11 +1145,45 @@ if (error) {
 };
 const App = () => {
   const [session, setSession] = useState(null);
+  // ✅ 增加一個 loading 狀態，避免在 session 檢查完成前顯示登入畫面
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    // 1. 立即檢查當前 session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false); // 檢查完畢，解除 loading
+    });
+
+    // 2. 監聽認證狀態的「真正」變化 (登入/登出)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        // ✅ 這裡的比較是關鍵：只在 session 的存在與否發生變化時才更新
+        // 這避免了因 token refresh 引起的無謂重渲染
+        setSession(session);
+      }
+    );
+
+    // 3. 在元件卸載時取消訂閱
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
-  return session ? <Dashboard user={session.user} /> : <LoginView onLogin={()=>{}} />;
+
+  // ✅ 在 loading 期間顯示一個簡單的載入畫面
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-400 font-bold">驗證身份中...</div>
+      </div>
+    );
+  }
+  
+  // ✅ 在 LoginView 中傳入一個會觸發 session 更新的 onLogin 函數
+  return session ? <Dashboard user={session.user} /> : <LoginView onLogin={() => {
+    // 登入成功後，手動再獲取一次 session 來觸發更新
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+  }} />;
 };
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
