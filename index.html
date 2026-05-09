@@ -162,7 +162,7 @@ body.lock-scroll {
             <div class="w-full rounded-[40px] overflow-hidden animate-slide-up z-20 mb-6 relative bg-white/80 backdrop-blur-2xl border border-white/70 shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-6">
 
                 <div class="rounded-[28px] overflow-hidden shadow-lg shadow-cyan-500/10">
-                    <img src="https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/public/logo/line_oa_chat_260504_153145.jpg" alt="寵沐 Pet Salon Logo" class="w-full h-auto object-cover">
+                    <img id="home-logo" src="https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/public/logo/line_oa_chat_260504_153145.jpg" alt="寵沐 Pet Salon Logo" class="w-full h-auto object-cover">
                 </div>
 
                 <div class="pt-8 text-center">
@@ -1234,15 +1234,16 @@ window.addEventListener('load', () => {
 
   // 電腦雙擊
   logo.addEventListener('dblclick', () => {
-window.location.href = "admin.html?from=pwa&t=" + Date.now();
+    window.location.href = "admin.html?from=pwa&t=" + Date.now();
   });
 
   // 手機雙點
   let lastTap = 0;
-  logo.addEventListener('touchend', () => {
+  logo.addEventListener('touchend', (e) => {
     const now = Date.now();
     if (now - lastTap < 400) {
-window.location.href = "admin.html?from=pwa&t=" + Date.now();
+      e.preventDefault(); // 防止觸發其他點擊事件
+      window.location.href = "admin.html?from=pwa&t=" + Date.now();
     }
     lastTap = now;
   });
