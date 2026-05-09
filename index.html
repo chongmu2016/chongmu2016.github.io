@@ -475,37 +475,6 @@ body.lock-scroll {
     </div>
 </div>
 
-<div class="glass-panel p-6 rounded-2xl relative">
-    <div class="flex items-center gap-3 mb-6 border-b border-theme-sub/20 pb-4">
-        <span class="text-2xl">📷</span>
-        <h3 class="font-bold text-theme-text text-lg">照片上傳</h3>
-    </div>
-    <div class="space-y-4">
-        <div>
-            <label class="block text-xs font-bold text-theme-sub mb-2 ml-1">寵物全身正面清晰照*</label>
-            <label class="w-full flex flex-col items-center justify-center p-5 bg-white/60 border-2 border-dashed border-theme-sub/30 rounded-xl cursor-pointer hover:border-theme-primary hover:bg-theme-bg/30 transition">
-                <input type="file" id="pet_photo_file" class="hidden" accept="image/*" onchange="previewPetPhoto(this)">
-                <img id="pet-photo-preview" class="w-24 h-24 rounded-full object-cover hidden mb-3 border-4 border-white shadow-md">
-                <div id="pet-photo-upload-text" class="flex items-center gap-2 text-theme-sub font-bold">
-                    <i data-lucide="upload-cloud" class="w-5 h-5"></i>
-                    <span>點擊上傳照片</span>
-                </div>
-            </label>
-        </div>
-        <div id="vaccine-upload-section" class="hidden">
-            <label class="block text-xs font-bold text-theme-sub mb-2 ml-1">疫苗手冊照片* (住宿必備)</label>
-            <label class="w-full flex flex-col items-center justify-center p-5 bg-white/60 border-2 border-dashed border-theme-sub/30 rounded-xl cursor-pointer hover:border-theme-primary hover:bg-theme-bg/30 transition">
-                <input type="file" id="vaccine_photo_file" class="hidden" accept="image/*" onchange="previewImage(this)">
-                 <img id="vaccine-photo-preview" class="h-24 rounded-lg object-contain hidden mb-3 border-4 border-white shadow-md">
-                <div id="upload-text" class="flex items-center gap-2 text-theme-sub font-bold">
-                    <i data-lucide="upload-cloud" class="w-5 h-5"></i>
-                    <span>點擊上傳疫苗手冊</span>
-                </div>
-            </label>
-        </div>
-    </div>
-</div>
-
 <div id="section-grooming" class="glass-panel p-6 rounded-2xl relative">
                     <div class="flex items-center gap-2 mb-6 border-b border-theme-sub/20 pb-3">
                         <span class="text-2xl">✂️</span>
@@ -775,9 +744,8 @@ body.lock-scroll {
 </div>
 </div>
 
-<!-- 這三個是儲存上傳結果 -->
+<!-- 這是儲存上傳結果 -->
 <input type="hidden" id="signature_url" name="signature_url">
-<input type="hidden" id="pet_photo_url" name="pet_photo_url">
 <input type="hidden" id="vaccine_photo_url" name="vaccine_photo_url">
 </div>
 
@@ -869,8 +837,6 @@ body.lock-scroll {
 
 <script>
 // ✅ 送出時才壓縮與上傳用的暫存變數
-let petPhotoFile = null;
-let vaccinePhotoFile = null;
 let signatureDataUrl = null;
 let isSubmitting = false;
 /* ===== Supabase 初始化（請整段替換） ===== */
@@ -1026,6 +992,13 @@ function fillBoardingFields(data) {
 function setField(key, val) {
     if (val === undefined || val === null) return;
 
+    // ✅ 特殊處理：當設定生日或年齡時，主動切換 UI Tab
+    if (key === 'pet_birthday' && val) {
+        toggleAgeInput('birthday');
+    } else if (key === 'pet_age' && val) {
+        toggleAgeInput('age');
+    }
+
     // 只抓 radio / checkbox
     const radios = document.querySelectorAll(
         `[name="${key}"][type="radio"], [name="${key}"][type="checkbox"]`
@@ -1037,6 +1010,7 @@ function setField(key, val) {
             if (r.type === "checkbox") {
                 r.checked = Array.isArray(val) ? val.includes(r.value) : (val === r.value);
             }
+            // 觸發 change 事件以更新 UI，例如 has-[:checked] 樣式
             if (r.checked) r.dispatchEvent(new Event("change"));
         });
         return;
@@ -1056,7 +1030,7 @@ function normalizeData(d) {
     const dict = {
         pet_type: { dog:"狗狗", cat:"貓咪" },
         gender: { m:"公", f:"母" },
-        neuter: { yes:"已結紮", no:"未結紮" },
+        // neuter: { yes:"已結紮", no:"未結紮" }, // 移除此行，讓 neuter 的值 'yes'/'no' 直接傳遞
         microchip_status: { yes:"有晶片", no:"無晶片", unknown:"有晶片號碼不詳" },
         vaccine: { yes:"有定期打疫苗", no:"沒有定期打疫苗" },
         deworming: { yes:"有定期驅蟲", no:"無定期驅蟲" },
@@ -1064,7 +1038,11 @@ function normalizeData(d) {
         food_guard: { yes:"會護食", no:"不會護食" },
         toilet: { yes:"會用尿布墊", no:"不會用尿布墊" }
     };
-    for (let k in dict) if (map[k] in dict[k]) map[k] = dict[k][map[k]];
+    for (let k in dict) {
+        if (map[k] in dict[k]) {
+            map[k] = dict[k][map[k]];
+        }
+    }
     return map;
 }
 
@@ -1139,14 +1117,6 @@ if (!form.checkValidity()) {
 }
 
     // ✅ 自訂檢查
-    if (!petPhotoFile) {
-        alert("請上傳寵物全身照");
-        return;
-    }
-    if (currentType === 'boarding' && !vaccinePhotoFile) {
-        alert("請上傳疫苗照片");
-        return;
-    }
     if (currentType === 'grooming' && !document.querySelector('input[name="service"]:checked')) {
         alert("請至少選擇一項美容服務");
         return;
@@ -1184,23 +1154,11 @@ if (!form.checkValidity()) {
         const signatureUrl = await uploadToSupabase(sigPath, sigBlob, "image/png");
         if (!signatureUrl) throw new Error("簽名上傳失敗");
 
-        // 2. 上傳寵物照片
-        let petUrl = "";
-        if (petPhotoFile) {
-            const compressedPet = await compressImage(petPhotoFile, 1280, 0.7);
-            petUrl = await uploadToSupabase(`pet_photos/${Date.now()}.jpg`, compressedPet, "image/jpeg");
-        }
-
-        // 3. 上傳疫苗照片
-        let vaccineUrl = "";
-        if (vaccinePhotoFile) {
-            const compressedVac = await compressImage(vaccinePhotoFile, 1280, 0.7);
-            vaccineUrl = await uploadToSupabase(`vaccine/${Date.now()}.jpg`, compressedVac, "image/jpeg");
-        }
+        // 照片上傳已移除，設定 vaccineUrl 為空字串
+        const vaccineUrl = "";
 
         // 填回 hidden 欄位
         document.getElementById("signature_url").value = signatureUrl || "";
-        document.getElementById("pet_photo_url").value = petUrl || "";
         document.getElementById("vaccine_photo_url").value = vaccineUrl || "";
 
         // 原本送出邏輯
@@ -1250,8 +1208,7 @@ if (currentType === "boarding") {
             type: currentType,
             data,
             signature_url: signatureUrl,
-            pet_photo_url: petUrl,
-            vaccine_photo_url: vaccineUrl
+            vaccine_photo_url: vaccineUrl // 保持這個欄位，但其值會是空字串
         };
 
         const { error } = await supabaseClient.from("contracts").insert([payload]);
@@ -1259,15 +1216,14 @@ if (currentType === "boarding") {
         if (error) throw error;
 
         // 主要流程成功，準備顯示成功頁面
-        const contractData = {
-            type: currentType,
-            data,
-            signature_url: signatureUrl,
-            pet_photo_url: petUrl,
-            vaccine_photo_url: vaccineUrl,
-            created_at: new Date().toISOString(),
-            signed_at: signatureTime ? signatureTime.toISOString() : new Date().toISOString()
-        };
+const contractData = {
+    type: currentType,
+    data,
+    signature_url: signatureUrl,
+    vaccine_photo_url: vaccineUrl,
+    created_at: new Date().toISOString(),
+    signed_at: signatureTime ? signatureTime.toISOString() : new Date().toISOString()
+};
 
         const hasEmail = (data.email || "").trim() !== "";
         let emailSentSuccessfully = false;
@@ -1419,9 +1375,6 @@ function updateBaseRequired() {
     setRequiredByName('dog_social', true);
     setRequiredByName('temperament', true);
     setRequiredByName('history_check', true);
-
-    // 寵物照片已透過自訂 JS 驗證，取消原生 required 以避免 invalid form control 報錯
-    setRequiredById('pet_photo_file', false);
 }
 // ✅ 生日 / 年齡必填控制
 function updateAgeRequired() {
@@ -1445,9 +1398,6 @@ function updateBoardingRequired() {
     setRequiredById('checkout_datetime', isBoarding);
     setRequiredById('total_price', isBoarding);
     setRequiredById('payment_status', isBoarding);
-
-    // 疫苗照片已透過自訂 JS 驗證，取消原生 required 避免隱藏元素報錯
-    setRequiredById('vaccine_photo_file', false);
 }
 // ✅ 晶片號碼：只有選「有晶片」才必填
 document.querySelectorAll('input[name="microchip_status"]').forEach(radio => {
@@ -1649,34 +1599,6 @@ function toggleBoardingType(type) {
         }
 
 
-// 3. 照片上傳預覽
-function previewImage(input) {
-    if (input.files && input.files[0]) {
-        vaccinePhotoFile = input.files[0];
-
-        const textSpan = document.getElementById('upload-text');
-        const previewImg = document.getElementById('vaccine-photo-preview');
-
-        previewImg.src = URL.createObjectURL(input.files[0]);
-        previewImg.classList.remove('hidden');
-
-        textSpan.innerText = "✅ 已完成";
-    }
-}
-        // 寵物全身照預覽
-function previewPetPhoto(input) {
-    if (input.files && input.files[0]) {
-        petPhotoFile = input.files[0];
-
-        const textSpan = document.getElementById('pet-photo-upload-text');
-        const previewImg = document.getElementById('pet-photo-preview');
-
-        previewImg.src = URL.createObjectURL(input.files[0]);
-        previewImg.classList.remove('hidden');
-
-        textSpan.innerText = "✅ 已完成";
-    }
-}
 function dataURLtoBlob(dataURL) {
     const arr = dataURL.split(',');
     const mime = arr[0].match(/:(.*?);/)[1];
@@ -2104,7 +2026,7 @@ function openSimpleContract() {
 }
 
 function generateContractHTML(payload) {
-    const { type, data, signature_url, pet_photo_url, vaccine_photo_url, created_at, signed_at } = payload;
+    const { type, data, signature_url, vaccine_photo_url, created_at, signed_at } = payload;
 
 const LOGO_URL = "https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/public/logo/line_oa_chat_260504_153145.jpg";
 
@@ -2278,12 +2200,6 @@ h1{margin:0;font-size:22px;font-weight:800;letter-spacing:2px;}
   ` : ""}
 
   <div class="section">
-    <div class="section-title">附件</div>
-    <div class="small">寵物照片：${pet_photo_url ? `<a href="${pet_photo_url}" target="_blank">檢視</a>` : "無"}</div>
-    <div class="small">疫苗手冊：${vaccine_photo_url ? `<a href="${vaccine_photo_url}" target="_blank">檢視</a>` : "無"}</div>
-  </div>
-
-  <div class="section">
     <div class="section-title">完整條款</div>
     <div class="terms">
       ${type === "grooming" ? TERMS_CONTENT.grooming : ""}
@@ -2360,6 +2276,25 @@ function checkTermsScroll(el) {
         tip.classList.add('hidden');
     }
 }
+
+// ✅ 防止填寫中意外離開頁面
+window.addEventListener('beforeunload', (event) => {
+    // 檢查表單是否可見
+    const formView = document.getElementById('view-form');
+    const isFormVisible = formView && !formView.classList.contains('hidden');
+
+    // 檢查是否有輸入內容 (以主人姓名為代表)
+    const ownerNameInput = document.getElementById('owner_name');
+    const hasContent = ownerNameInput && ownerNameInput.value.trim() !== '';
+
+    // 當表單可見且有內容時，才觸發提示
+    if (isFormVisible && hasContent) {
+        // 大部分現代瀏覽器會忽略自訂訊息，只顯示標準提示
+        event.preventDefault(); 
+        // 這是觸發瀏覽器標準提示的必要寫法
+        event.returnValue = '';
+    }
+});
 
     </script>
 <div id="pwa-update-toast" class="fixed bottom-6 left-6 right-6 md:left-auto md:right-8 md:w-80 z-[1000] transform translate-y-32 opacity-0 transition-all duration-500 pointer-events-none">
