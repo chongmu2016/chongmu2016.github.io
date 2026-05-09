@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>寵沐PetSalon | 後台管理</title>
+<link rel="icon" href="https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/public/logo/line_oa_chat_260504_153145.jpg" type="image/png">
+  <link rel="manifest" href="manifest-admin.json">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@300;400;500;700;900&family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script>
+    // 沿用 react 元件中預設的 'bear' class 前綴以降低替換範圍，但色彩已換成寵沐主題色
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bear: {
+              primary: "#8FD3E0",   
+              dark: "#50645B",      
+              text: "#4A5D50",      
+              bg: "#F6FAFB",        
+              accent: "#F4B4C5",    
+              red: "#E28484"
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { font-family: "Noto Sans TC", sans-serif; background-color: #F6FAFB; color: #4A5D50; }
+    .glass-card { background: rgba(255,255,255,0.75); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.8); border-radius: 24px; box-shadow: 0 8px 32px rgba(74,93,80,.08); }
+    .status-badge { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 900; }
+    .status-pending { background: #FEF3C7; color: #D97706; }
+    .status-confirmed { background: #D1FAE5; color: #059669; }
+    .status-completed { background: #E5E7EB; color: #374151; }
+    .status-cancelled { background: #FEE2E2; color: #DC2626; }
+.admin-input {
+  width: 100%;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 16px;   /* ✅ 16px 避免 iOS 自動放大 */
+  color: #333;
+}
+.admin-input:focus {
+  outline: none;
+  border-color: #8FD3E0;
+}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+const supabaseUrl = "https://ptwvmgarrwygphmahsoo.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0d3ZtZ2Fycnd5Z3BobWFoc29vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNjA3MjEsImV4cCI6MjA5MzgzNjcyMX0.jtnYNRFvlDE59J8HPejZSTZQLIZj422GN8cmShEwM7k";
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+const ADMIN_EMAIL = "chongmu2016@gmail.com";
+const STAFF_EMAIL = "staff@chongmu2016.com";
+const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+const joinArr = (v) => toArr(v).filter(Boolean);
+
+const getServiceTags = (raw) => {
+  let tags = [];
+  if (raw.service) tags = tags.concat(joinArr(raw.service));
+  if (raw.upgrade_service) tags = tags.concat(joinArr(raw.upgrade_service));
+  if (raw.other_service_text) tags.push(`其他：${raw.other_service_text}`);
+  if (raw.matting_suspected) tags.push("有打結");
+  return tags;
+};
+
+const getBoardingDate = (raw) => {
+  if (raw.daycare_date) {
+    return `${raw.daycare_date} ${raw.arrive_time || ""} - ${raw.leave_time || ""}`;
+  }
+  if (raw.checkin_date || raw.checkout_date) {
+    return `${raw.checkin_date || ""} - ${raw.checkout_date || ""}`;
+  }
+  return "";
+};
+const Icon = ({ name, size = 18 }) => {
+  const ref = useRef(null);
+  useEffect(() => { if (window.lucide && ref.current) window.lucide.createIcons({ root: ref.current }); }, [name]);
+  return <span ref={ref}><i data-lucide={name} style={{ width: size, height: size }}></i></span>;
+};
+
+const T = (val) => {
+  if (val === true || val === "true") return "是";
+  if (val === false || val === "false") return "否";
+  if (!val) return "-";
+  const map = { grooming:"洗澡美容", boarding:"住宿", daycare:"安親", dog:"狗狗", cat:"貓咪" };
+  return map[val] || val;
+};
+const ChangePasswordModal = ({ isOpen, onClose }) => {
+  const [targetEmail, setTargetEmail] = useState(ADMIN_EMAIL);
+  const [oldPwd, setOldPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleUpdate = async () => {
+    if (newPwd !== confirmPwd) return alert("❌ 兩次新密碼不一致");
+    if (newPwd.length < 6) return alert("❌ 密碼至少6位");
+
+    setLoading(true);
+    try {
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: targetEmail,
+        password: oldPwd
+      });
+      if (verifyError) throw new Error("舊密碼錯誤");
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPwd });
+      if (updateError) throw updateError;
+
+      alert("✅ 密碼更新成功！");
+      onClose();
+    } catch (e) {
+      alert("修改失敗：" + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl">
+        <h3 className="font-black text-lg text-center mb-4">修改密碼</h3>
+
+        <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
+          <button onClick={() => setTargetEmail(ADMIN_EMAIL)} className={`flex-1 py-2 rounded-lg text-xs font-bold ${targetEmail===ADMIN_EMAIL?'bg-white text-bear-primary':'text-gray-400'}`}>管理員</button>
+          <button onClick={() => setTargetEmail(STAFF_EMAIL)} className={`flex-1 py-2 rounded-lg text-xs font-bold ${targetEmail===STAFF_EMAIL?'bg-white text-bear-dark':'text-gray-400'}`}>員工</button>
+        </div>
+
+        <input type="password" placeholder="舊密碼" value={oldPwd} onChange={e=>setOldPwd(e.target.value)} className="admin-input mb-2" />
+        <input type="password" placeholder="新密碼" value={newPwd} onChange={e=>setNewPwd(e.target.value)} className="admin-input mb-2" />
+        <input type="password" placeholder="再次輸入新密碼" value={confirmPwd} onChange={e=>setConfirmPwd(e.target.value)} className="admin-input mb-4" />
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 bg-gray-100 rounded-lg text-xs font-bold">取消</button>
+          <button onClick={handleUpdate} className="flex-1 py-2 bg-bear-dark text-white rounded-lg text-xs font-bold">{loading?"處理中...":"確認修改"}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+const parseData = (order) => {
+  try { return typeof order.data === "string" ? JSON.parse(order.data) : (order.data || {}); }
+  catch { return {}; }
+};
+
+/* ✅ LoginView */
+const LoginView = ({ onLogin }) => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+const [error, setError] = useState("");
+const passwordRef = useRef(null);
+
+const selectRole = (roleEmail) => {
+  // ✅ 強制同步渲染，確保 input 已出現
+  ReactDOM.flushSync(() => {
+    setEmail(roleEmail);
+    setPassword("");
+    setError("");
+  });
+
+  // ✅ 同一個點擊事件內立即 focus (iOS 才會跳鍵盤)
+  passwordRef.current?.focus();
+  passwordRef.current?.click(); // iOS 有時需要點一下
+};
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    if (authError) {
+      setError("帳號或密碼錯誤");
+      setLoading(false);
+    } else {
+      onLogin();
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="glass-card w-full max-w-md p-10 text-center">
+<img src="https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/public/logo/line_oa_chat_260504_153145.jpg" className="w-28 mx-auto mb-6 rounded-2xl shadow object-cover" />
+        <h1 className="text-xl font-black text-bear-text mb-6">寵沐PetSalon｜後台管理</h1>
+
+        {/* ✅ 身分按鈕 */}
+        <div className={`${email ? "hidden" : "block"} space-y-4`}>
+          <button
+            onClick={() => selectRole(ADMIN_EMAIL)}
+            className="w-full py-4 rounded-2xl bg-white border-2 border-bear-primary font-black flex justify-center items-center gap-2"
+          >
+            <Icon name="shield" /> 管理員登入
+          </button>
+
+          <button
+            onClick={() => selectRole(STAFF_EMAIL)}
+            className="w-full py-4 rounded-2xl bg-white border-2 border-bear-accent font-black flex justify-center items-center gap-2"
+          >
+            <Icon name="user" /> 員工登入
+          </button>
+
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={() => window.location.href = "index.html"}
+              className="w-full py-3 rounded-xl bg-gray-100 text-bear-text font-bold border hover:bg-gray-200 transition"
+            >
+              ← 返回填寫首頁
+            </button>
+          </div>
+        </div>
+
+        {/* ✅ 密碼表單（一直存在 DOM，才可立即 focus） */}
+        <form onSubmit={handleLogin} className={`${email ? "block" : "hidden"} space-y-4`}>
+          {/* ✅ 讓 iOS/Android 密碼管理器可套用 FaceID/指紋 */}
+          <input
+            type="email"
+            value={email}
+            readOnly
+            autoComplete="username"
+            className="hidden"
+          />
+
+          <div className={`px-4 py-2 rounded-full text-sm font-black text-white ${email===ADMIN_EMAIL?'bg-bear-primary':'bg-bear-dark'}`}>
+            {email===ADMIN_EMAIL?'管理員模式':'員工模式'}
+          </div>
+
+          <input
+            ref={passwordRef}
+            className="admin-input text-center"
+            type="password"
+            placeholder="請輸入密碼"
+            value={password}
+            onChange={(e)=>setPassword(e.target.value)}
+            autoComplete="current-password"
+            autoCorrect="off"
+            autoCapitalize="none"
+            enterKeyHint="go"
+          />
+
+          {error && <div className="text-red-500 text-xs font-bold">{error}</div>}
+
+          <button disabled={loading} className="w-full bg-bear-dark text-white py-3 rounded-xl font-bold shadow">
+            {loading ? "登入中..." : "登入"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setEmail(""); setPassword(""); }}
+            className="text-xs text-gray-400 font-bold"
+          >
+            ← 切換身份
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+const OrderFieldContext = React.createContext({
+  editMode: false,
+  editData: {},
+  updateField: () => {}
+});
+
+const Field = ({ label, value, fieldKey, editable=false, type="text", textarea=false }) => {
+  const { editMode, editData, updateField } = React.useContext(OrderFieldContext);
+
+  return (
+    <div>
+      <span className="text-gray-400 text-xs">{label}</span>
+      {editable && editMode ? (
+        textarea ? (
+          <textarea
+            className="admin-input text-sm h-20"
+            value={editData?.[fieldKey] || ""}
+            onChange={(e)=>updateField(fieldKey, e.target.value)}
+          />
+        ) : (
+          <input
+            className="admin-input text-sm"
+            type={type}
+            value={editData?.[fieldKey] || ""}
+            onChange={(e)=>updateField(fieldKey, e.target.value)}
+          />
+        )
+      ) : (
+        <div className="font-bold break-all">{value || "-"}</div>
+      )}
+    </div>
+  );
+};
+const OrderModal = ({ order, onClose, onUpdateStatus, onUpdateNote, onUpdateData, onDelete, canEdit, canUpdateStatus, isAdmin }) => {
+  if (!order) return null;
+const raw = parseData(order);
+const [note, setNote] = useState(order.admin_note || "");
+const [localStatus, setLocalStatus] = useState(order.status);
+const [editMode, setEditMode] = useState(false);
+const [editData, setEditData] = useState(raw);
+
+// ✅ 備註即時儲存用（每字存）
+const noteRef = useRef(order.admin_note || "");
+const lastSavedRef = useRef(order.admin_note || "");
+
+useEffect(() => {
+  setNote(order.admin_note || "");
+  setLocalStatus(order.status);
+  setEditMode(false);
+  setEditData(raw);
+  noteRef.current = order.admin_note || "";
+  lastSavedRef.current = order.admin_note || "";
+}, [order?.id]);
+
+const saveNoteNow = async (val) => {
+  if (val === lastSavedRef.current) return;
+  const ok = await onUpdateNote(order.id, val);
+  if (ok) lastSavedRef.current = val;
+};
+
+const handleNoteChange = (e) => {
+  const val = e.target.value;
+  setNote(val);
+  noteRef.current = val;
+  saveNoteNow(val); // ✅ 每打一個字就存
+};
+
+const handleBlur = async () => {
+  await saveNoteNow(noteRef.current);
+};
+const updateField = (key, val) => {
+  setEditData(prev => ({ ...prev, [key]: val }));
+};
+
+const handleSaveEdit = async () => {
+  const ok = await onUpdateData(order.id, editData);
+  if (ok) setEditMode(false);
+};
+
+
+  const toStr = (v) =>
+    Array.isArray(v) ? v.filter(Boolean).join("、") : v || "-";
+
+return (
+  <OrderFieldContext.Provider value={{ editMode, editData, updateField }}>
+    <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        
+<div className="p-5 border-b flex justify-between items-center">
+  <h3 className="font-black text-lg flex items-center gap-2">
+    <Icon name={order.type === "grooming" ? "scissors" : "home"} />
+    {T(order.type)} 詳情
+  </h3>
+  <div className="flex items-center gap-2">
+    {isAdmin && !editMode && (
+      <button onClick={()=>setEditMode(true)} className="px-3 py-1 rounded-full text-xs font-bold bg-gray-100">
+        編輯資料
+      </button>
+    )}
+    {isAdmin && editMode && (
+      <>
+        <button onClick={handleSaveEdit} className="px-3 py-1 rounded-full text-xs font-bold bg-bear-primary text-white">
+          儲存
+        </button>
+        <button onClick={()=>{setEditMode(false); setEditData(raw);}} className="px-3 py-1 rounded-full text-xs font-bold bg-gray-100">
+          取消
+        </button>
+      </>
+    )}
+<button onClick={async ()=>{ await saveNoteNow(noteRef.current); onClose(); }}>
+  <Icon name="x" size={22} />
+</button>
+  </div>
+</div>
+
+<div className="p-6 overflow-y-auto space-y-6 text-sm">
+
+  {/* 店家備註(內部用) */}
+  <div className="bg-yellow-50/60 border border-yellow-200 rounded-2xl p-4">
+    <label className="text-xs font-bold text-yellow-700 mb-2 block">店家備註（內部用）</label>
+<textarea
+  className="w-full h-20 p-2 rounded-xl text-sm border bg-white/70"
+  value={note}
+  onChange={handleNoteChange}
+  onBlur={handleBlur}
+  placeholder="僅供內部備註使用..."
+/>
+  </div>
+          {/* 狀態 */}
+<div className="grid grid-cols-4 gap-2">
+  {["pending","confirmed","completed","cancelled"].map(s => (
+    <button key={s}
+onClick={async ()=>{
+  if(!canUpdateStatus) return;
+  const ok = await onUpdateStatus(order.id, s);
+  if(ok) setLocalStatus(s);
+}}
+      className={`py-2 rounded-xl text-xs font-bold border ${localStatus === s ? "bg-bear-primary text-white border-bear-primary" : "bg-white text-gray-400 border-gray-200"}`}>
+      {s==="pending"?"待確認":s==="confirmed"?"已確認":s==="completed"?"已完成":"已取消"}
+    </button>
+  ))}
+</div>
+
+{/* 飼主資料 */}
+<div className="bg-bear-bg p-4 rounded-2xl border">
+  <h4 className="font-bold mb-2">飼主資料</h4>
+  <div className="grid grid-cols-2 gap-3">
+    <Field label="姓名" value={raw.owner_name} fieldKey="owner_name" editable />
+    <Field label="電話" value={raw.phone} fieldKey="phone" editable />
+    <Field label="Email" value={raw.email} fieldKey="email" editable />
+    <Field label="身分證字號" value={raw.id_number} fieldKey="id_number" editable />
+    <Field label="地址" value={raw.address} fieldKey="address" editable />
+    <Field label="緊急聯絡人" value={raw.emergency_contact} fieldKey="emergency_contact" editable />
+    <Field label="緊急電話" value={raw.emergency_phone} fieldKey="emergency_phone" editable />
+  </div>
+</div>
+
+{/* 寵物資料 */}
+<div className="bg-bear-bg p-4 rounded-2xl border">
+  <h4 className="font-bold mb-2">寵物資料</h4>
+  <div className="grid grid-cols-2 gap-3">
+    <Field label="名字" value={raw.pet_name} fieldKey="pet_name" editable />
+    <Field label="種類" value={raw.pet_type} fieldKey="pet_type" editable />
+    <Field label="品種" value={raw.pet_breed} fieldKey="pet_breed" editable />
+    <Field label="體重" value={raw.pet_weight ? raw.pet_weight + " kg" : ""} fieldKey="pet_weight" editable />
+<Field
+  label="生日"
+  value={
+    raw.pet_birthday
+      ? `${raw.pet_birthday} (${calcAgeFromBirthday(raw.pet_birthday)} 歲)`
+      : ""
+  }
+  fieldKey="pet_birthday"
+  editable
+  type="date"
+/>
+    <Field label="年齡" value={raw.pet_age ? raw.pet_age + " 歲" : ""} fieldKey="pet_age" editable />
+    <Field label="性別" value={raw.gender} fieldKey="gender" editable />
+    <Field label="結紮" value={raw.neuter} fieldKey="neuter" editable />
+    <Field label="晶片狀態" value={raw.microchip_status} fieldKey="microchip_status" editable />
+    <Field label="晶片號碼" value={raw.microchip_number} fieldKey="microchip_number" editable />
+    <Field label="個性" value={raw.temperament} fieldKey="temperament" editable />
+    <Field label="性情補充" value={raw.temperament_note} fieldKey="temperament_note" editable textarea />
+    <Field label="攻擊性" value={raw.aggression} fieldKey="aggression" editable />
+    <Field label="與狗相處" value={raw.dog_social} fieldKey="dog_social" editable />
+    <Field label="過往病史" value={raw.history_check} fieldKey="history_check" editable />
+    <Field label="病史詳情" value={raw.history_detail} fieldKey="history_detail" editable textarea />
+    <Field label="指定醫院" value={raw.specified_hospital} fieldKey="specified_hospital" editable />
+  </div>
+</div>
+
+          {/* 美容內容 */}
+          {order.type === "grooming" && (
+            <div className="bg-bear-bg p-4 rounded-2xl border space-y-2">
+              <h4 className="font-bold mb-2">美容內容</h4>
+
+              <Field label="主要服務" value={toStr(raw.service)} />
+              <Field label="加購服務" value={toStr(raw.upgrade_service)} />
+
+              {raw.other_service_text && (
+                <Field label="其他需求" value={raw.other_service_text} />
+              )}
+
+              <Field label="是否有打結" value={raw.matting_suspected ? "有" : "無"} />
+
+{raw.matting_suspected && (
+  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-sm">
+    <div className="font-bold text-yellow-700">打結處理方式</div>
+    <div>
+      {raw.matting_choice === "方案一"
+        ? "方案一 | 拆結處理 另外計費"
+        : raw.matting_choice === "方案二"
+          ? "方案二 | 不拆結，直接修剪"
+          : (raw.matting_choice || "未選擇")}
+    </div>
+  </div>
+)}
+            </div>
+          )}
+
+{/* 住宿內容 */}
+{(order.type === "boarding" || order.type === "daycare") && (
+  <div className="bg-bear-bg p-4 rounded-2xl border space-y-2">
+    <h4 className="font-bold mb-2">
+      {raw.daycare_date ? "安親資訊" : "住宿資訊"}
+    </h4>
+
+    {raw.daycare_date ? (
+      <>
+        <Field label="安親日期" value={raw.daycare_date} fieldKey="daycare_date" editable type="date" />
+        {raw.arrive_time && <Field label="抵達時間" value={raw.arrive_time} fieldKey="arrive_time" editable type="time" />}
+        {raw.leave_time && <Field label="接回時間" value={raw.leave_time} fieldKey="leave_time" editable type="time" />}
+      </>
+    ) : (
+      <>
+        <Field label="入住日期" value={raw.checkin_date} fieldKey="checkin_date" editable type="date" />
+        <Field label="退房日期" value={raw.checkout_date} fieldKey="checkout_date" editable type="date" />
+      </>
+    )}
+
+    {raw.social_note && <Field label="其他說明" value={raw.social_note} fieldKey="social_note" editable textarea />}
+
+    <Field label="驅蟲" value={raw.deworming} fieldKey="deworming" editable />
+    {raw.deworming_brand && <Field label="驅蟲藥品牌" value={raw.deworming_brand} fieldKey="deworming_brand" editable />}
+
+    <Field label="吠叫" value={raw.barking} fieldKey="barking" editable />
+    {raw.barking_note && <Field label="吠叫說明" value={raw.barking_note} fieldKey="barking_note" editable textarea />}
+
+    <Field label="護食" value={raw.food_guard} fieldKey="food_guard" editable />
+    {raw.food_guard_note && <Field label="護食說明" value={raw.food_guard_note} fieldKey="food_guard_note" editable textarea />}
+
+    <Field label="如廁" value={raw.toilet} fieldKey="toilet" editable />
+    {raw.toilet_note && <Field label="如廁說明" value={raw.toilet_note} fieldKey="toilet_note" editable textarea />}
+
+    <Field label="疫苗" value={raw.vaccine} fieldKey="vaccine" editable />
+    {raw.boarding_note && <Field label="住宿備註" value={raw.boarding_note} fieldKey="boarding_note" editable textarea />}
+  </div>
+)}
+
+{/* 照片 / 簽名 */}
+<div className="bg-bear-bg p-4 rounded-2xl border space-y-3">
+  <h4 className="font-bold">照片 / 簽名</h4>
+
+  {order.pet_photo_url && (
+    <div>
+      <div className="text-xs text-gray-400 mb-1">寵物全身照</div>
+      <img src={order.pet_photo_url} className="rounded-xl w-48 border" />
+    </div>
+  )}
+
+  {order.vaccine_photo_url && (
+    <div>
+      <div className="text-xs text-gray-400 mb-1">疫苗照片</div>
+      <img src={order.vaccine_photo_url} className="rounded-xl w-48 border" />
+    </div>
+  )}
+
+{order.signature_url && (
+  <div>
+    <div className="text-xs text-gray-400 mb-1">簽名</div>
+    <img src={order.signature_url} className="rounded-xl w-48 border" />
+    <div className="text-[11px] text-gray-400 mt-1">
+      簽署時間：{new Date(order.created_at).toLocaleString('zh-TW', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      })}
+    </div>
+  </div>
+)}
+</div>
+
+
+          {isAdmin && (
+<button onClick={async ()=>{
+  if(!confirm("確定刪除？")) return;
+  const ok = await onDelete(order.id);
+  if(ok) onClose();
+}}
+  className="w-full bg-red-500 text-white font-bold py-2 rounded-xl">
+  刪除此紀錄
+</button>
+          )}
+        </div>
+      </div>
+    </div>
+  </OrderFieldContext.Provider>
+);
+};
+const calcAgeFromBirthday = (birthday) => {
+  if (!birthday) return "";
+  const b = new Date(birthday);
+  const today = new Date();
+  let age = today.getFullYear() - b.getFullYear();
+  const m = today.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < b.getDate())) age--;
+  if (age < 0) age = 0;
+  return age;
+};
+// ✅ 顧客詳細資料 Modal
+const CustomerDetailModal = ({ customer, onClose, onSelectOrder }) => {
+  if (!customer) return null;
+  return (
+    <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-[#F9F7F2] rounded-[2.5rem] w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+        <div className="bg-white p-6 flex justify-between items-center border-b">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-bear-primary rounded-2xl flex items-center justify-center text-white text-xl font-black">
+              {customer.name[0]}
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-bear-text">{customer.name}</h3>
+              <p className="text-sm font-bold text-gray-400">{customer.phone}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+            <Icon name="x" size={24}/>
+          </button>
+        </div>
+        <div className="p-6 overflow-y-auto space-y-6">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white p-4 rounded-2xl text-center border">
+              <div className="text-[10px] font-bold text-gray-400">來訪次數</div>
+              <div className="text-lg font-black text-bear-primary">{customer.visitCount}次</div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl text-center border">
+              <div className="text-[10px] font-bold text-gray-400">毛孩數</div>
+              <div className="text-lg font-black text-bear-dark">{customer.pets.size}隻</div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl text-center border">
+              <div className="text-[10px] font-bold text-gray-400">最近來訪</div>
+              <div className="text-sm font-black text-gray-600">{customer.lastDate}</div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <h4 className="font-black text-bear-text flex items-center gap-2">
+              <Icon name="history" size={18}/> 歷史紀錄
+            </h4>
+            {customer.history.map(order => {
+              const d = parseData(order);
+              return (
+                <div key={order.id} onClick={() => { onSelectOrder(order); onClose(); }}
+                  className="bg-white p-4 rounded-2xl border hover:border-bear-primary cursor-pointer transition-all flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${order.type === 'grooming' ? 'bg-bear-primary/10 text-bear-primary' : 'bg-bear-dark/10 text-bear-dark'}`}>
+                      <Icon name={order.type === 'grooming' ? 'scissors' : 'home'} size={16}/>
+                    </div>
+                    <div>
+                      <div className="text-sm font-black">{new Date(order.created_at).toLocaleDateString()}</div>
+                      <div className="text-[10px] text-gray-400 font-bold">{d.pet_name || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs font-black text-gray-400">{order.type === 'grooming' ? '美容' : '住宿'}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+// ✅ 台灣時區格式化：YYYY-MM-DD
+const formatDateTW = (date) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date(date));
+
+const parseYMDToDateTW = (ymd) => new Date(ymd + "T00:00:00+08:00");
+// ✅ 日曆檢視元件
+const CalendarView = ({ orders, onSelectOrder }) => {
+const today = formatDateTW(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(today);
+
+  const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
+
+const getOrderDates = (order) => {
+  const d = parseData(order);
+
+  // ✅ 住宿 or 安親
+  if (order.type === "boarding" || order.type === "daycare") {
+    if (d.daycare_date) return [d.daycare_date];
+    if (d.checkin_date && d.checkout_date) {
+      const result = [];
+      let cur = parseYMDToDateTW(d.checkin_date);
+      const end = parseYMDToDateTW(d.checkout_date);
+      while (cur <= end) {
+        result.push(formatDateTW(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+      return result;
+    }
+  }
+
+  // ✅ 美容用台灣時區
+  return [formatDateTW(order.created_at)];
+};
+
+  const ordersByDate = useMemo(() => {
+    const map = {};
+    orders.forEach(o => {
+      getOrderDates(o).forEach(date => {
+        if (!map[date]) map[date] = [];
+        map[date].push(o);
+      });
+    });
+    return map;
+  }, [orders]);
+
+  const dailyOrders = ordersByDate[selectedDate] || [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center bg-white p-4 rounded-3xl shadow-sm border">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() - 1)))} className="p-2 hover:bg-gray-100 rounded-full"><Icon name="chevron-left"/></button>
+          <h3 className="font-black text-lg">{currentMonth.getFullYear()}年 {currentMonth.getMonth()+1}月</h3>
+          <button onClick={() => setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() + 1)))} className="p-2 hover:bg-gray-100 rounded-full"><Icon name="chevron-right"/></button>
+        </div>
+        <button onClick={() => { setCurrentMonth(new Date()); setSelectedDate(today); }} className="px-4 py-1.5 bg-bear-dark text-white rounded-full text-xs font-black">今天</button>
+      </div>
+
+      <div className="bg-white rounded-[2rem] border shadow-sm overflow-hidden">
+        <div className="grid grid-cols-7 bg-gray-50 border-b">
+          {['日','一','二','三','四','五','六'].map(d => (
+            <div key={d} className="text-center text-[10px] font-black text-gray-400 py-3">{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} className="border-b border-r border-gray-50 min-h-[100px]" />)}
+          {[...Array(daysInMonth)].map((_, i) => {
+            const d = i + 1;
+            const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const isSelected = dateStr === selectedDate;
+            const isToday = dateStr === today;
+            const list = ordersByDate[dateStr] || [];
+            return (
+              <div key={d} onClick={() => setSelectedDate(dateStr)} className={`min-h-[100px] border-b border-r border-gray-50 p-1 cursor-pointer ${isSelected ? 'bg-bear-primary/10 ring-2 ring-inset ring-bear-primary' : ''}`}>
+                <div className="flex justify-between items-start mb-1">
+                  <span className={`text-[11px] font-black w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-red-500 text-white' : isSelected ? 'text-bear-primary' : 'text-gray-400'}`}>{d}</span>
+                </div>
+                <div className="space-y-0.5 overflow-hidden">
+                  {list.slice(0,3).map(o => {
+                    const d = parseData(o);
+                    return (
+                      <div key={o.id} className={`text-[9px] font-black px-1.5 py-0.5 rounded-sm truncate text-white ${o.type === 'grooming' ? 'bg-blue-400' : 'bg-orange-400'}`}>
+                        {d.pet_name || '毛孩'}
+                      </div>
+                    );
+                  })}
+                  {list.length > 3 && (
+                    <div className="text-[8px] text-gray-400 font-bold text-center mt-0.5">+{list.length - 3} 更多</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="bg-[#F5F9F6] rounded-[2rem] p-6 border-2 border-dashed border-bear-dark/20">
+        <div className="flex justify-between items-center mb-4">
+          <h4 className="font-black text-bear-text flex items-center gap-2"><Icon name="calendar-check"/> {selectedDate} 名單</h4>
+          <span className="bg-white border px-3 py-1 rounded-full text-[10px] font-black">{dailyOrders.length} 筆</span>
+        </div>
+{dailyOrders.length > 0 ? dailyOrders.map(o => {
+  const d = parseData(o);
+
+  const isDaycare = o.type === "daycare" || d.daycare_date;
+
+  const daycareTime = d.arrive_time || d.leave_time
+    ? `安親時間：${d.arrive_time || "-"} ~ ${d.leave_time || "-"}`
+    : (d.daycare_date ? `安親日期：${d.daycare_date}` : "");
+
+  const stayRange = (d.checkin_date || d.checkout_date)
+    ? `住宿期間：${d.checkin_date || ""} ~ ${d.checkout_date || ""}`
+    : "";
+
+  return (
+    <div key={o.id} onClick={() => onSelectOrder(o)} className="bg-white p-4 rounded-2xl border hover:border-bear-primary cursor-pointer flex justify-between items-center mb-2">
+      <div>
+        <div className="font-black text-bear-text">{d.pet_name || '-'}</div>
+        <div className="text-[10px] text-gray-400 font-bold">{d.owner_name || ''}</div>
+
+        {/* ✅ 安親顯示時間 / 住宿顯示期間 */}
+        {(o.type === "boarding" || o.type === "daycare") && (
+          <div className="text-[10px] text-bear-dark font-bold mt-1">
+            {isDaycare ? daycareTime : stayRange}
+          </div>
+        )}
+      </div>
+
+      <div className="text-xs font-black text-gray-400">
+        {o.type === 'grooming' ? '美容' : (isDaycare ? '安親' : '住宿')}
+      </div>
+    </div>
+  );
+}) : (
+          <div className="py-10 text-center text-gray-400 font-bold">今日無預約</div>
+        )}
+      </div>
+    </div>
+  );
+};
+const Dashboard = ({ user }) => {
+  const isAdmin = user?.email === ADMIN_EMAIL;
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("grooming");
+  const [search, setSearch] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showPwdModal, setShowPwdModal] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+const [syncing, setSyncing] = useState(false);
+  const verifyAdminPassword = async () => {
+    if (!isAdmin) return false;
+    const pwd = prompt("請輸入管理員密碼");
+    if (!pwd) return false;
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: ADMIN_EMAIL,
+      password: pwd
+    });
+
+    if (error) {
+      alert("管理員密碼錯誤");
+      return false;
+    }
+    return true;
+  };
+const manualSync = async () => {
+  setSyncing(true);
+  try {
+    await fetchOrders();
+  } finally {
+    setTimeout(() => setSyncing(false), 500); // 顯示一下狀態
+  }
+};
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    let query = supabase
+      .from("contracts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (activeTab === "grooming") query = query.eq("type", "grooming");
+    if (activeTab === "boarding") query = query.in("type", ["boarding", "daycare"]);
+    // calendar / crm 不加 type 篩選，抓全部
+
+    const { data, error } = await query;
+if (error) {
+  console.error("fetchOrders error:", error);
+  alert("讀取失敗：" + (error.message || "unknown"));
+} else {
+  setOrders(data || []);
+}
+    setLoading(false);
+  }, [activeTab]);
+
+  // 初次 + 切分頁
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // 回到前景、視窗聚焦、自動輪詢
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchOrders();
+    };
+    const onFocus = () => fetchOrders();
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+
+    const timer = setInterval(() => {
+      fetchOrders();
+    }, 30000); // 每 30 秒自動更新一次
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      clearInterval(timer);
+    };
+  }, [fetchOrders]);
+
+  // Supabase 即時更新（新增/修改/刪除都會刷新）
+  useEffect(() => {
+    const channel = supabase
+      .channel("contracts-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "contracts" },
+        () => {
+          fetchOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchOrders]);
+
+  const updateStatus = async (id, status) => {
+    await supabase.from("contracts").update({ status }).eq("id", id);
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    return true;
+  };
+
+  const updateNote = async (id, note) => {
+    await supabase.from("contracts").update({ admin_note: note }).eq("id", id);
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, admin_note: note } : o));
+    return true;
+  };
+
+  const updateData = async (id, data) => {
+    const ok = await verifyAdminPassword();
+    if (!ok) return false;
+
+    await supabase.from("contracts").update({ data }).eq("id", id);
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, data } : o));
+    return true;
+  };
+
+  const deleteOrder = async (id) => {
+    const ok = await verifyAdminPassword();
+    if (!ok) return false;
+
+    await supabase.from("contracts").delete().eq("id", id);
+    setOrders(prev => prev.filter(o => o.id !== id));
+    return true;
+  };
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      const raw = parseData(o);
+      return (raw.owner_name || "").includes(search) ||
+             (raw.phone || "").includes(search) ||
+             (raw.pet_name || "").includes(search);
+    });
+  }, [orders, search]);
+
+  // ✅ CRM 顧客管理分組
+  const customers = useMemo(() => {
+    const groups = {};
+    orders.forEach(order => {
+      const raw = parseData(order);
+      const phone = raw.phone || order.phone;
+      if (!phone) return;
+
+      if (!groups[phone]) {
+        groups[phone] = {
+          name: raw.owner_name || order.owner_name || "未命名",
+          phone,
+          totalSpent: 0,
+          visitCount: 0,
+          pets: new Set(),
+          history: [],
+          _lastRaw: null,
+          lastDate: ""
+        };
+      }
+      groups[phone].visitCount += 1;
+      groups[phone].history.push(order);
+      if (raw.pet_name) groups[phone].pets.add(raw.pet_name);
+
+      if (!groups[phone]._lastRaw || new Date(order.created_at) > new Date(groups[phone]._lastRaw)) {
+        groups[phone]._lastRaw = order.created_at;
+        groups[phone].lastDate = new Date(order.created_at).toLocaleDateString();
+      }
+    });
+
+    return Object.values(groups).sort((a, b) => b.visitCount - a.visitCount);
+  }, [orders]);
+
+  const filteredCustomers = useMemo(() => {
+    return customers.filter(c =>
+      c.name.includes(search) ||
+      c.phone.includes(search) ||
+      [...c.pets].some(p => p.includes(search))
+    );
+  }, [customers, search]);
+
+  return (
+    <div className="min-h-screen pb-20">
+      <nav className="sticky top-0 z-30 bg-white/80 backdrop-blur-md px-6 py-4 border-b flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <img src="https://ptwvmgarrwygphmahsoo.supabase.co/storage/v1/object/public/logo/line_oa_chat_260504_153145.jpg" className="w-10 h-10 rounded-full object-cover" />
+          <span className="font-black text-bear-text">寵沐 Admin</span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isAdmin?'bg-bear-primary text-white':'bg-gray-200 text-gray-500'}`}>
+            {isAdmin ? "管理員" : "員工"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button onClick={()=>setShowPwdModal(true)} className="w-10 h-10 bg-white border rounded-full flex items-center justify-center text-bear-dark">
+              <Icon name="key" size={16} />
+            </button>
+          )}<button
+  onClick={manualSync}
+  disabled={syncing}
+  className={`w-10 h-10 rounded-full flex items-center justify-center border ${
+    syncing ? "bg-gray-100 text-gray-300" : "bg-white text-bear-dark"
+  }`}
+  title="立即同步"
+>
+  <Icon name={syncing ? "loader-circle" : "refresh-cw"} size={16} />
+</button>
+          <button onClick={() => supabase.auth.signOut()} className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
+            <Icon name="log-out" />
+          </button>
+        </div>
+      </nav>
+
+      <main className="max-w-4xl mx-auto p-6 space-y-6">
+        <input type="text" placeholder="搜尋飼主、電話、寵物名..." value={search}
+          onChange={(e)=>setSearch(e.target.value)} className="w-full px-4 py-3 rounded-2xl bg-white shadow border focus:outline-none" />
+
+<div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-white p-2 rounded-2xl shadow border">
+  <button
+    onClick={()=>setActiveTab("grooming")}
+    className={`py-2 rounded-xl font-bold flex items-center justify-center gap-2 ${activeTab==="grooming"?"bg-bear-primary text-white":"text-gray-400"}`}
+  >
+    <Icon name="scissors" size={16} /> 洗澡美容
+  </button>
+
+  <button
+    onClick={()=>setActiveTab("boarding")}
+    className={`py-2 rounded-xl font-bold flex items-center justify-center gap-2 ${activeTab==="boarding"?"bg-bear-dark text-white":"text-gray-400"}`}
+  >
+    <Icon name="home" size={16} /> 住宿安親
+  </button>
+
+  <button
+    onClick={()=>setActiveTab("calendar")}
+    className={`py-2 rounded-xl font-bold flex items-center justify-center gap-2 ${activeTab==="calendar"?"bg-bear-accent text-bear-text":"text-gray-400"}`}
+  >
+    <Icon name="calendar" size={16} /> 日曆檢視
+  </button>
+
+  <button
+    onClick={()=>setActiveTab("crm")}
+    className={`py-2 rounded-xl font-bold flex items-center justify-center gap-2 ${activeTab==="crm"?"bg-gray-800 text-white":"text-gray-400"}`}
+  >
+    <Icon name="users" size={16} /> 顧客管理
+  </button>
+</div>
+
+        {loading ? (
+          <div className="text-center py-10 text-gray-400 font-bold">載入中...</div>
+        ) : activeTab === "calendar" ? (
+          <CalendarView orders={orders} onSelectOrder={setSelectedOrder} />
+        ) : activeTab === "crm" ? (
+          <div className="space-y-3">
+            {filteredCustomers.map(c => (
+              <div key={c.phone} onClick={() => setSelectedCustomer(c)} className="glass-card p-5 cursor-pointer">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="font-black text-lg">{c.name}</div>
+                    <div className="text-xs text-gray-500">{c.phone} · {c.visitCount}次 · {c.pets.size}隻</div>
+                    <div className="text-[10px] text-gray-400">最近來訪：{c.lastDate}</div>
+                  </div>
+                  <div className="text-xs text-gray-400">查看 →</div>
+                </div>
+              </div>
+            ))}
+            {filteredCustomers.length === 0 && <div className="text-center py-10 text-gray-300 font-bold">沒有顧客資料</div>}
+          </div>
+        ) : (
+          <div className="space-y-4">
+{filteredOrders.map(order => {
+  const raw = parseData(order);
+  const boardingDate = (order.type === "boarding" || order.type === "daycare") ? getBoardingDate(raw) : "";
+
+  const hasNote = !!order.admin_note;
+
+  const isBigGrooming =
+    order.type === "grooming" &&
+    [...toArr(raw.service), ...toArr(raw.upgrade_service)]
+      .some(s => String(s).includes("大美容"));
+
+  const isDaycare = order.type === "daycare" || !!raw.daycare_date;
+
+  return (
+    <div key={order.id} onClick={()=>setSelectedOrder(order)} className="glass-card p-5 cursor-pointer">
+      <div className="flex justify-between items-start">
+        <div>
+          <div className="text-[10px] text-gray-400 font-bold">
+            {(order.type === "boarding" || order.type === "daycare") ? boardingDate : new Date(order.created_at).toLocaleString()}
+          </div>
+          <div className="font-black text-lg">{raw.pet_name || "-"}</div>
+<div className="text-xs text-gray-500 flex flex-wrap items-center gap-1">
+  <span>{raw.owner_name || "-"} · {raw.phone || "-"}</span>
+
+  {hasNote && (
+    <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-bold">備註</span>
+  )}
+  {isBigGrooming && (
+    <span className="text-[10px] px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 font-bold">大美容</span>
+  )}
+  {isDaycare && (
+    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold">安親</span>
+  )}
+</div>
+        </div>
+
+        <div className="text-right flex flex-col items-end gap-1">
+          <span className={`status-badge ${
+            order.status === 'pending' ? 'status-pending' :
+            order.status === 'confirmed' ? 'status-confirmed' :
+            order.status === 'cancelled' ? 'status-cancelled' : 'status-completed'
+          }`}>
+            {order.status === 'pending' ? '待確認' :
+             order.status === 'confirmed' ? '已確認' :
+             order.status === 'cancelled' ? '已取消' : '已完成'}
+          </span>
+
+        </div>
+      </div>
+    </div>
+  );
+})}
+            {filteredOrders.length === 0 && <div className="text-center py-10 text-gray-300 font-bold">暫無紀錄</div>}
+          </div>
+        )}
+      </main>
+
+      <OrderModal
+        order={selectedOrder}
+        onClose={()=>setSelectedOrder(null)}
+        onUpdateStatus={updateStatus}
+        onUpdateNote={updateNote}
+        onUpdateData={updateData}
+        onDelete={deleteOrder}
+        canEdit={isAdmin}
+        canUpdateStatus={true}
+        isAdmin={isAdmin}
+      />
+      <ChangePasswordModal isOpen={showPwdModal} onClose={()=>setShowPwdModal(false)} />
+      <CustomerDetailModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} onSelectOrder={setSelectedOrder} />
+    </div>
+  );
+};
+const App = () => {
+  const [session, setSession] = useState(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+  }, []);
+  return session ? <Dashboard user={session.user} /> : <LoginView onLogin={()=>{}} />;
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+<script>
+const ADMIN_SW_VERSION = "v15";
+let refreshing = false;
+let __adminReg = null;
+
+// 保留這兩個函式，避免下面 HTML 的 onclick 報錯
+function dismissUpdate() {
+  const toast = document.getElementById("admin-update-toast");
+  if (!toast) return;
+  toast.classList.add("translate-y-32", "opacity-0", "pointer-events-none");
+}
+
+function applyUpdate() {
+  // 你現在是強制自動更新策略，這裡給手動備援
+  if (__adminReg && __adminReg.waiting) {
+    __adminReg.waiting.postMessage({ type: "SKIP_WAITING" });
+    return;
+  }
+  // 如果沒有 waiting，就主動檢查更新一次
+  if (__adminReg) __adminReg.update();
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    const reg = await navigator.serviceWorker.register(`sw.js?v=${ADMIN_SW_VERSION}`, {
+      updateViaCache: "none"
+    });
+    __adminReg = reg;
+
+    const forceActivate = (sw) => sw && sw.postMessage({ type: "SKIP_WAITING" });
+
+    // 已經有 waiting 新版 -> 直接啟用
+    if (reg.waiting) forceActivate(reg.waiting);
+
+    // 發現新版 -> 裝好就直接啟用
+    reg.addEventListener("updatefound", () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener("statechange", () => {
+        if (sw.state === "installed" && navigator.serviceWorker.controller) {
+          forceActivate(sw);
+        }
+      });
+    });
+
+    // 回到前景就檢查更新
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") reg.update();
+    });
+
+    // 每 5 分鐘檢查一次
+    setInterval(() => reg.update(), 5 * 60 * 1000);
+  });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+}
+</script>
+<div id="admin-update-toast"
+     class="fixed bottom-6 left-6 right-6 md:left-auto md:right-8 md:w-80 z-[9999]
+            transform translate-y-32 opacity-0 transition-all duration-500 pointer-events-none">
+  <div class="glass-card p-5 rounded-[24px] border border-bear-primary/30 shadow-2xl flex flex-col gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-bear-primary/20 flex items-center justify-center text-bear-primary">
+        <i data-lucide="sparkles" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <p class="text-sm font-bold text-bear-text">發現新版本內容</p>
+        <p class="text-[10px] text-gray-500">點擊更新以獲取最新功能</p>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="dismissUpdate()"
+              class="flex-1 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition">
+        稍後再說
+      </button>
+      <button onclick="applyUpdate()"
+              class="flex-[2] py-2 bg-bear-dark text-white text-xs font-bold rounded-xl shadow-lg">
+        立即更新
+      </button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+
