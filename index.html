@@ -1270,21 +1270,29 @@ const hasEmail = (data.email || "").trim() !== "";
 
 // ✅ 如果有填 email，就寄出副本
 if (hasEmail) {
+    // 使用 generateContractHTML 產生完整的契約 HTML
     const html = generateContractHTML(contractData);
 
-    await fetch("https://ptwvmgarrwygphmahsoo.supabase.co/functions/v1/resend-email", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-        },
-body: JSON.stringify({
-    to: data.email,
-    html,
-    petNames: data.pet_name || "毛孩"
-})
-    });
+    // 呼叫您部署的 Supabase Edge Function (resend-email)
+    try {
+        await fetch("https://ptwvmgarrwygphmahsoo.supabase.co/functions/v1/resend-email", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            // 根據您的 index.ts 檔案結構來建立 body
+            body: JSON.stringify({
+                customerName: data.owner_name || "顧客",
+                customerEmail: data.email,
+                emailHtml: html // 將完整的契約 HTML 傳遞給後端
+            })
+        });
+    } catch (emailError) {
+        // 即使 Email 寄送失敗，也不要中斷流程，只在 console 記錄錯誤
+        console.error("Email notification failed:", emailError);
+    }
 }
 
 showSuccessPage(contractData, hasEmail);
@@ -1897,68 +1905,114 @@ function showTerms() {
                 modal.classList.add('hidden');
             }, 300);
         }
-/* ====== PWA 更新處理（前台 index）====== */
+/* ====== PWA 自動更新處理 (整合版本) ====== */
 const PWA_SW_VERSION = "v16";
 let newWorker = null;
 let refreshing = false;
 let __indexReg = null;
 
+// 判斷使用者是否正在填寫表單，以避免更新中斷操作
 function __isFormVisible() {
     const formView = document.getElementById("view-form");
     if (!formView) return false;
     return !formView.classList.contains("hidden");
 }
 
+// 註冊 Service Worker 並處理更新邏輯
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", async () => {
         const reg = await navigator.serviceWorker.register(`sw.js?v=${PWA_SW_VERSION}`, {
-            updateViaCache: "none"
+            updateViaCache: "none" // 確保每次都從網路檢查 sw.js
         });
         __indexReg = reg;
 
         const forceActivate = (sw) => sw && sw.postMessage({ type: "SKIP_WAITING" });
 
-        // 如果已經有 waiting 的新版
+        // 情況1：註冊時就發現有等待中的新版本
         if (reg.waiting) {
             newWorker = reg.waiting;
             if (__isFormVisible()) {
-                showUpdateToast(); // 正在填表，不強制重整
+                showUpdateToast(); // 正在填表，顯示提示讓使用者決定
             } else {
-                forceActivate(reg.waiting); // 非填表頁，直接更新
+                forceActivate(reg.waiting); // 不在表單頁，直接啟用更新
             }
         }
 
-        // 主動檢查更新
+        // 定期檢查更新 (每 5 分鐘)
         reg.update();
         setInterval(() => reg.update(), 5 * 60 * 1000);
 
+        // 情況2：監聽到發現新版本
         reg.addEventListener("updatefound", () => {
             newWorker = reg.installing;
             if (!newWorker) return;
 
             newWorker.addEventListener("statechange", () => {
+                // 新版本安裝完成且當前頁面已被 SW 控制
                 if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
                     if (__isFormVisible()) {
-                        showUpdateToast(); // 正在填表，顯示按鈕由使用者決定
+                        showUpdateToast();
                     } else {
-                        forceActivate(newWorker); // 非填表頁，直接更新
+                        forceActivate(newWorker);
                     }
                 }
             });
         });
 
-        // 回到前景就檢查更新
+        // 當使用者切回頁面時，也檢查一次更新
         document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === "visible") reg.update();
         });
     });
 
+    // 當新的 SW 控制頁面時，自動重整
     navigator.serviceWorker.addEventListener("controllerchange", () => {
         if (refreshing) return;
         refreshing = true;
         window.location.reload();
     });
 }
+
+// 顯示更新提示 Toast
+function showUpdateToast() {
+    // 如果使用者已對此版本選擇 "稍後再說"，則不再提示
+    if (localStorage.getItem("pwa_sw_version") === PWA_SW_VERSION) return;
+
+    const toast = document.getElementById("pwa-update-toast");
+    if (!toast) return;
+    toast.classList.remove("translate-y-32", "opacity-0", "pointer-events-none");
+    toast.classList.add("pointer-events-auto");
+    toast.style.pointerEvents = "auto";
+    lucide.createIcons();
+}
+
+// 關閉更新提示
+function dismissUpdate() {
+    const toast = document.getElementById("pwa-update-toast");
+    if (!toast) return;
+    toast.classList.add("translate-y-32", "opacity-0", "pointer-events-none");
+    toast.style.pointerEvents = "none";
+}
+
+// 使用者點擊 "立即更新"
+function applyUpdate() {
+    // 記錄使用者已處理此版本的更新，避免重複提示
+    localStorage.setItem("pwa_sw_version", PWA_SW_VERSION);
+
+    dismissUpdate();
+
+    if (newWorker) {
+        newWorker.postMessage({ type: "SKIP_WAITING" });
+    }
+
+    // 備用方案：若 controllerchange 事件因故未觸發，2秒後強制重整
+    setTimeout(() => {
+        window.location.reload();
+    }, 2000);
+}
+/* ====== PWA 處理結束 ====== */
+
+
 let lastContractData = null;
 
 function showSuccessPage(contractData, hasEmail) {
@@ -2279,44 +2333,6 @@ function checkTermsScroll(el) {
         btn.innerText = "我已閱讀並同意";
         tip.classList.add('hidden');
     }
-}
-function showUpdateToast() {
-    // ✅ 如果已經更新過這個版本，就不再跳
-    if (localStorage.getItem("pwa_sw_version") === PWA_SW_VERSION) return;
-
-    const toast = document.getElementById("pwa-update-toast");
-    if (!toast) return;
-    toast.classList.remove("translate-y-32", "opacity-0", "pointer-events-none");
-    toast.classList.add("pointer-events-auto");
-    toast.style.pointerEvents = "auto";
-    lucide.createIcons();
-}
-
-function dismissUpdate() {
-    const toast = document.getElementById("pwa-update-toast");
-    if (!toast) return;
-    toast.classList.add("translate-y-32", "opacity-0", "pointer-events-none");
-    toast.style.pointerEvents = "none";
-}
-
-function applyUpdate() {
-    // ✅ 記錄已更新版本
-    localStorage.setItem("pwa_sw_version", PWA_SW_VERSION);
-
-    dismissUpdate();
-
-    if (newWorker) {
-        newWorker.postMessage({ type: "SKIP_WAITING" });
-    }
-
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-        window.location.reload();
-    });
-
-    // ✅ 若 2 秒內沒換 controller，就強制刷新
-    setTimeout(() => {
-        window.location.reload();
-    }, 2000);
 }
 
     </script>
