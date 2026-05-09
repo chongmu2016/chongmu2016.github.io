@@ -821,8 +821,6 @@ body.lock-scroll {
     </div>
 </form>
 </div>
-            </form>
-        </div>
 <!-- ✅ 成功頁 (由此開始) -->
 <div id="view-success" class="hidden flex-col items-center justify-center min-h-[80vh] py-8">
   <div class="glass-panel w-full rounded-[28px] p-6 sm:p-8 text-center space-y-6 flex flex-col items-center">
@@ -2283,22 +2281,18 @@ h1{margin:0;font-size:22px;font-weight:800;letter-spacing:2px;}
 
   ${type === "boarding" ? `
   <div class="section card">
-    <b>住宿/安親內容</b><br>
-    入住日期：${data.checkin_date || "-"}<br>
-    退房日期：${data.checkout_date || "-"}<br>
-    安親日期：${data.daycare_date || "-"}<br>
-    抵達時間：${data.arrive_time || "-"}<br>
-    接回時間：${data.leave_time || "-"}<br>
+    <b>住宿內容</b><br>
+    入住時間：${data.checkin_datetime ? new Date(data.checkin_datetime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit' }) : "-"}<br>
+    退房時間：${data.checkout_datetime ? new Date(data.checkout_datetime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit' }) : "-"}<br>
     驅蟲狀況：${data.deworming || "-"}<br>
-    驅蟲牌子：${data.deworming_brand || "-"}<br>
-    是否吠叫：${data.barking || "-"}<br>
-    吠叫備註：${data.barking_note || "-"}<br>
-    是否護食：${data.food_guard || "-"}<br>
-    護食備註：${data.food_guard_note || "-"}<br>
-    是否使用尿布墊：${data.toilet || "-"}<br>
-    廁所備註：${data.toilet_note || "-"}<br>
+    驅蟲廠牌：${data.deworming_brand || "-"}<br>
     疫苗狀態：${data.vaccine || "-"}<br>
-    備註：${data.boarding_note || "無"}<br>
+    是否吠叫：${data.barking || "-"} (${data.barking_note || "無補充"})<br>
+    是否護食：${data.food_guard || "-"} (${data.food_guard_note || "無補充"})<br>
+    如廁習慣：${data.toilet || "-"} (${data.toilet_note || "無補充"})<br>
+    攜帶物品：${formatList(data.owner_items)}<br>
+    其他物品：${data.other_items || "無"}<br>
+    注意事項：${data.boarding_note || "無"}<br>
   </div>
   ` : ""}
 
