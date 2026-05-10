@@ -768,9 +768,9 @@ body.lock-scroll {
             <h4 class="text-xs font-bold text-theme-sub tracking-widest uppercase mb-2">乙方（店家）資訊</h4>
             <div class="grid grid-cols-2 gap-y-2 text-sm">
                 <div><span class="text-theme-sub text-xs block">店家名稱</span><span class="font-bold text-theme-text">寵沐寵物美容生活館</span></div>
-                <div><span class="text-theme-sub text-xs block">負責人</span><span class="font-bold text-theme-text">景麗華</span></div>
+                <div><span class="text-theme-sub text-xs block">負責人</span><span id="vendor-responsible-person" class="font-bold text-theme-text">景麗華</span></div>
                 <div><span class="text-theme-sub text-xs block">特寵業字號</span><span class="font-bold text-theme-text">特寵業字第A1070619號</span></div>
-                <div><span class="text-theme-sub text-xs block">統一編號</span><span class="font-bold text-theme-text">72786205</span></div>
+                <div><span class="text-theme-sub text-xs block">統一編號</span><span id="vendor-company-tax-id" class="font-bold text-theme-text">72786205</span></div>
                 <div><span class="text-text-theme-sub text-xs block">聯絡電話</span><span class="font-bold text-theme-text">02 2600 8572</span></div>
                 <div><span class="text-theme-sub text-xs block">營業時間</span><span id="vendor-hours" class="font-bold text-theme-text">11:00-20:00 (週二、隔週一公休)</span></div>
                 <div class="col-span-2"><span class="text-theme-sub text-xs block">營業地址</span><span id="vendor-address" class="font-bold text-theme-text">新北市林口區中山路235號</span></div>
@@ -1469,13 +1469,15 @@ if (checkin && checkout) {
     lucide.createIcons();        
 let storeInfo = {
     address: "載入中...",
-    hours: "載入中..."
+    hours: "載入中...",
+    responsible_person: "載入中...",
+    company_tax_id: "載入中..."
 };
 
 async function fetchStoreInfo() {
     const { data, error } = await supabaseClient
         .from('store_info')
-        .select('address, hours')
+        .select('address, hours, map_url, responsible_person, company_tax_id')
         .eq('id', 1)
         .single();
     
@@ -1486,11 +1488,19 @@ async function fetchStoreInfo() {
         const locationAddress = document.getElementById('location-address');
         const vendorAddress = document.getElementById('vendor-address');
         const vendorHours = document.getElementById('vendor-hours');
+        const vendorResponsiblePerson = document.getElementById('vendor-responsible-person');
+        const vendorCompanyTaxId = document.getElementById('vendor-company-tax-id');
 
         if (locationAddress) locationAddress.innerText = data.address;
-        if (locationLink) locationLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`;
+        
+        // 如果有填 map_url 就用它，否則用地址自動產生
+        const finalMapUrl = data.map_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`;
+        if (locationLink) locationLink.href = finalMapUrl;
+        
         if (vendorAddress) vendorAddress.innerText = data.address;
         if (vendorHours) vendorHours.innerText = data.hours;
+        if (vendorResponsiblePerson) vendorResponsiblePerson.innerText = data.responsible_person;
+        if (vendorCompanyTaxId) vendorCompanyTaxId.innerText = data.company_tax_id;
     }
 }
         // 1. 路由處理
@@ -1902,7 +1912,7 @@ function showTerms() {
             }, 300);
         }
 /* ====== PWA 自動更新處理 (整合版本) ====== */
-const PWA_SW_VERSION = "v2";
+const PWA_SW_VERSION = "v3";
 let newWorker = null;
 let refreshing = false;
 let lastContractData = null;
@@ -2352,7 +2362,7 @@ ${isHighRisk ? `
         </div>
         <div class="vendor-item">
           <span class="label">負責人</span>
-          <span class="value">景麗華</span>
+          <span class="value">${storeInfo.responsible_person}</span>
         </div>
         <div class="vendor-item">
           <span class="label">特寵業字號</span>
@@ -2360,7 +2370,7 @@ ${isHighRisk ? `
         </div>
         <div class="vendor-item">
           <span class="label">統一編號</span>
-          <span class="value">72786205</span>
+          <span class="value">${storeInfo.company_tax_id}</span>
         </div>
         <div class="vendor-item">
           <span class="label">聯絡電話</span>

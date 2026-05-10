@@ -1167,7 +1167,7 @@ if (error) {
   );
 };
 const SettingsView = () => {
-  const [info, setInfo] = useState({ address: "", hours: "", map_url: "" });
+  const [info, setInfo] = useState({ address: "", hours: "", map_url: "", responsible_person: "", company_tax_id: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -1205,7 +1205,9 @@ const SettingsView = () => {
       .update({ 
         address: info.address, 
         hours: info.hours,
-        map_url: info.map_url 
+        map_url: info.map_url,
+        responsible_person: info.responsible_person,
+        company_tax_id: info.company_tax_id
       })
       .eq('id', 1);
     
@@ -1254,6 +1256,26 @@ const SettingsView = () => {
           value={info.hours || ''}
           onChange={(e) => setInfo(prev => ({...prev, hours: e.target.value}))}
           placeholder="請輸入營業時間說明"
+        />
+      </div>
+      <div>
+        <label className="text-sm font-bold text-gray-500 mb-1 block">負責人</label>
+        <input 
+          type="text" 
+          className="admin-input"
+          value={info.responsible_person || ''}
+          onChange={(e) => setInfo(prev => ({...prev, responsible_person: e.target.value}))}
+          placeholder="請輸入公司負責人姓名"
+        />
+      </div>
+      <div>
+        <label className="text-sm font-bold text-gray-500 mb-1 block">統一編號</label>
+        <input 
+          type="text" 
+          className="admin-input"
+          value={info.company_tax_id || ''}
+          onChange={(e) => setInfo(prev => ({...prev, company_tax_id: e.target.value}))}
+          placeholder="請輸入公司統一編號"
         />
       </div>
       <button 
